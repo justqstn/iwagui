@@ -4,16 +4,16 @@
 #include <time.h>
 #include <string>
 
-
 namespace {
     FILE* logs;
 }
 
 void iwa::log(const char* type, char code, const char* format, ...)
 {
-    if (logs == NULL)
+    if (::logs == NULL)
     {
-        logs = fopen((std::to_string((unsigned long)time(NULL)) + ".txt").c_str(), "w");
+        freopen("CONOUT$", "w", stdout); 
+        ::logs = fopen((std::to_string((unsigned long)time(NULL)) + ".iwalog").c_str(), "w");
     }
 
     HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -35,9 +35,9 @@ void iwa::log(const char* type, char code, const char* format, ...)
     vprintf(format, args);
     printf("\n");
 
-    fprintf(logs, "(%s) [%s] ", buffer, type);
-    vfprintf(logs, format, args);
-    fprintf(logs, "\n");
+    fprintf(::logs, "(%s) [%s] ", buffer, type);
+    vfprintf(::logs, format, args);
+    fprintf(::logs, "\n");
 
 
     va_end(args);
@@ -47,5 +47,5 @@ void iwa::log(const char* type, char code, const char* format, ...)
 
 void iwa::savelogs()
 {
-    fclose(logs);
+    fclose(::logs);
 }

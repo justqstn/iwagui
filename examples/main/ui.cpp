@@ -4,11 +4,6 @@
 #include "imgui_internal.h"
 #include "windows.h"
 
-#include "logger.hpp"
-#include "tween.hpp"
-#include "widgets.hpp"
-#include "utils.hpp"
-
 #include <cmath>
 #include <format>
 
@@ -19,14 +14,14 @@ namespace vars
     bool first_time = true;
 }
 
-void iwa::ui::setstyle()
+void ui::setstyle()
 {
     ImGui::StyleColorsDark();
 }
 
 static iwa::event<> on_toggle_post;
 
-iwa::ui::ui()
+ui::ui()
 {
     this->on_toggle.add([](){
         vars::opened = true;
@@ -87,12 +82,12 @@ private:
     const bool backwards;
 };
 
-void iwa::ui::tick(float dt)
+void ui::tick(float dt)
 {
     iwa::tween::tickall(dt);
 }
 
-void iwa::ui::render(float dt)
+void ui::render(float dt)
 {
     auto io = ImGui::GetIO();
 
@@ -151,7 +146,7 @@ void iwa::ui::render(float dt)
             static iwa::tween size_animation = ({
                 iwa::tween::params params;
 
-                params.tp = tween_type::repeatable;
+                params.tp = iwa::tween_type::repeatable;
                 params.forward_speed.fn = [](float t) -> float  { return t < 0.5 ? 4 * t * t * t : 1 - std::pow(-2 * t + 2, 3) / 2; };
                 params.backward_speed.fn = []( float t) -> float { return t < 0.5 ? 4 * t * t * t : 1 - std::pow(-2 * t + 2, 3) / 2; };
                 params.set_speed(0.33f);

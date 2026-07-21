@@ -1,3 +1,7 @@
+/**
+ * @todo This will need to be redone later. At this moment it's just a temporary solution. At least i want to channels and more detailed settings.
+ */
+
 #pragma once
 
 #include <Windows.h>
