@@ -4,17 +4,19 @@ project(iwagui)
 
 set (CMAKE_CXX_STANDARD 20)
 
-add_subdirectory(deps/ImGui)
+set (ROOT ${CMAKE_SOURCE_DIR}/../..)
 
-aux_source_directory(src/ui ui_srcs)  
-aux_source_directory(src srcs)  
+add_subdirectory(${ROOT}/deps/ImGui ${CMAKE_CURRENT_BINARY_DIR}/imgui)
+
+aux_source_directory(./ui ui_srcs)  
+aux_source_directory(. srcs)  
 
 add_library(iwagui STATIC ${srcs} ${ui_srcs} $<TARGET_OBJECTS:ImGui_lib>)
 
 target_include_directories(iwagui PUBLIC 
-    deps/ImGui
-    src
-    src/ui
+    ${ROOT}/deps/ImGui
+    .
+    ./ui
 )
 
 target_compile_options(iwagui PRIVATE -O3 -flto)

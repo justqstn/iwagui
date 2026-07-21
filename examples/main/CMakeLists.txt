@@ -9,7 +9,7 @@ find_library(D3DCompiler D3DCompiler)
 find_library(D3D11 D3D11)
 find_library(dwmapi dwmapi)
 
-add_subdirectory(${ROOT} ${CMAKE_CURRENT_BINARY_DIR}/iwagui)
+add_subdirectory(${ROOT}/iwa ${CMAKE_CURRENT_BINARY_DIR}/iwagui)
 
 aux_source_directory(. srcs)  
 add_executable(main ${srcs})
