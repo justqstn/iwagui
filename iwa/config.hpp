@@ -1,0 +1,1 @@
+#define SHOW_ANCHOR_POINTS 1

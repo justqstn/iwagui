@@ -18,23 +18,33 @@ begin::begin(const begin::params& data)
 {
     this->data = data;
     this->data.set_bounds({{0,0}, get_screen_resolution()});
-    if (this->data.header_thickness.scaled) this->data.header_thickness.parent = this->data.size.y;
+    if (this->data.header_thickness.scaled) this->data.header_thickness.factor(this->data.size.y);
     begins.emplace_back(this);
+}
+
+void begin::params::scaling()
+{
+    this->pos_scaling();
+    this->size_scaling();
+    if (this->header_thickness.value != 0.0f)
+    {
+        this->header_thickness.scaling();
+    }
 }
 
 void begin::render(const float dt)
 {
     auto& params = this->data;
     auto& rect = params.compute_rect();
-    ImVec2 min = rect.min;
-    ImVec2 max = rect.max;
+    ImVec2 min = rect.Min;
+    ImVec2 max = rect.Max;
     auto drawlist = ImGui::GetForegroundDrawList();
     params.pre.call(dt);
 
     drawlist->PushClipRect(min, max);
     drawlist->AddRectFilled(min, max, iwa::apply_alpha(params.color), params.rounding);
 
-    params.header_thickness.change_parent(params.size.y);
+    params.header_thickness.factor(params.size.y);
     float header_thickness = params.header_thickness.get();
 
     if (header_thickness > 0)

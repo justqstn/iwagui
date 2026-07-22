@@ -30,7 +30,7 @@ namespace iwa
         class window : widget
         {
         public:
-            struct params : widget::params
+            struct params : plane_canvas, widget::params
             {
                 friend window;
                 corners_flags corners = corners_flags::none;
@@ -46,13 +46,14 @@ namespace iwa
             struct params : window::params
             {
                 friend begin;
-
+                
                 std::string header;
                 iwa::scaled_float header_thickness;
                 ImU32 header_color;
                 ImU32 header_line_color;
                 ImU32 outline_color;
                 begin_flags flags = begin_flags::none;
+                void scaling();
             };
             params data;
             begin(const params& data);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "iwagui.hpp"
+#include "singleton.hpp"
 class ui : public iwa::singleton<ui>
 {
 public:

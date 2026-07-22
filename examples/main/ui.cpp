@@ -121,17 +121,17 @@ void ui::render(float dt)
         params.forward_speed.fn = [](float t) { return 1.0f - (float)std::pow(1.0f - t, 3); };
         params;
     });
-
+    
     
     static iwa::widgets::begin main = ({
         iwa::widgets::begin::params params;
 
         params.color = ImColor(25, 25, 25);
         params.header_color = ImColor(19, 19, 19);
-        params.header_thickness = {.value = 0.045, .scaled = true};
+        params.header_thickness = 0.03f; 
         params.pos = {0.5,0.5};
         params.anchor = {0.5,0.5};
-        params.size = {0.4,0.4};
+        params.size = {0.5,0.6};
         params.scaling();
         params.header_line_color = ImColor(177, 177, 177, 45);
         params.outline_color = ImColor(177, 177, 177, 45);
@@ -139,7 +139,8 @@ void ui::render(float dt)
         params.pre.add([](float dt){
             static auto color = ImColor(225, 180, 200, 175);
             auto& rect = main.data.compute_rect();
-            ImGui::GetForegroundDrawList()->AddShadowRect(rect.min, rect.max, (color & 0x00FFFFFF) | ((int)((color >> 24) * sh_alpha.value) << 24), 60, {0,0});
+            auto drawlist = ImGui::GetForegroundDrawList();
+            drawlist->AddShadowRect(rect.Min, rect.Max, (color & 0x00FFFFFF) | ((int)((color >> 24) * sh_alpha.value) << 24), 60, {0,0});
         });
 
         params.post.add([](float dt) {
@@ -150,14 +151,35 @@ void ui::render(float dt)
                 params.forward_speed.fn = [](float t) -> float  { return t < 0.5 ? 4 * t * t * t : 1 - std::pow(-2 * t + 2, 3) / 2; };
                 params.backward_speed.fn = []( float t) -> float { return t < 0.5 ? 4 * t * t * t : 1 - std::pow(-2 * t + 2, 3) / 2; };
                 params.set_speed(0.33f);
-
                 params;
             });
-            
-            //main.set_pos(size_animation.value, 0.5f);            
+
+            static iwa::widgets::text example = ({
+                iwa::widgets::text::params params;
+                params.text = "Test text";
+                params.color = IM_COL32_WHITE;
+                params.pos = {0.5,0.03 / 2};
+                params.size = 0.75f; params.size.factor(main.data.header_thickness.get());
+                params.scaling();
+                params.anchor = {0.5,0.5};
+                params.set_bounds(main.data.compute_rect());
+                
+                params;
+            }); 
+
+            example.render(dt);
+
         });
 
         LOGD("Main window created");
+        params;
+    });
+
+    static iwa::tween debug_tween = ({
+        iwa::tween::params params;
+        params.set_speed(0.25f);
+        params.tp = iwa::tween_type::repeatable;
+
         params;
     });
 
@@ -248,5 +270,12 @@ void ui::render(float dt)
 
 
     auto mouse_pos = ImGui::GetMousePos();
-    ImGui::GetForegroundDrawList()->AddText(mouse_pos - ImVec2(0, 20), IM_COL32_WHITE, std::format("{} {}", mouse_pos.x, mouse_pos.y).c_str());
+
+    auto drawlist =  ImGui::GetForegroundDrawList();
+
+    auto screen_res = iwa::get_screen_resolution();
+    ImVec2 scale = mouse_pos / screen_res;
+
+    drawlist->AddText(mouse_pos - ImVec2(0, -20), IM_COL32_WHITE, std::format("{} {}", scale.x, scale.y).c_str());
+    drawlist->AddText(mouse_pos - ImVec2(0, 20), IM_COL32_WHITE, std::format("{} {}", mouse_pos.x, mouse_pos.y).c_str());
 }

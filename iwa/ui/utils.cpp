@@ -21,35 +21,50 @@ ImColor iwa::apply_alpha(ImColor src)
     return iwa::apply_alpha(src, ImGui::GetStyle().Alpha);
 }
 
-ImVec2 iwa::scale(ImVec2 vec, ImVec2 parent)
+iwa::scaled_float::scaled_float(float value)
 {
-    return vec * parent;
-}
-
-ImVec2 iwa::scale(float x, float y, float px, float py)
-{
-    return {x * py, y * px};
+    this->value = value;
+    this->__is_saved_originals = true;
+    this->__original = value;
 }
 
 float iwa::scaled_float::get()
 {
-    if (this->scaled)
+    if (this->__is_recomputing)
     {
-        if (this->noncomputed < 0.0f) this->noncomputed = this->value;
-        this->value = this->noncomputed * this->parent;
-        this->scaled = false;
+        // @todo Implement error handling (if factor is zero)
+        this->value = this->__original * this->scaling_factor;
+
+        this->__is_recomputing = false;
     }
     return this->value;
 }
 
-void iwa::scaled_float::set(float value, bool scaled)
+void iwa::scaled_float::set(float value)
 {
-    this->value = value;
-    this->scaled = scaled;
+    if (this->scaled)
+    {   
+        this->__original = value;
+        this->__is_recomputing = true;
+    }
+    else
+    {
+        this->value = value;
+    }
 }
 
-void iwa::scaled_float::change_parent(float parent)
+void iwa::scaled_float::factor(float factor)
+{
+    if (this->scaling_factor != factor)
+    {
+        this->scaled = true;
+        this->scaling_factor = factor;  
+        this->__is_recomputing = true;
+    }
+}
+
+void iwa::scaled_float::scaling()
 {
     this->scaled = true;
-    this->parent = parent;  
+    this->__is_recomputing = true;
 }
