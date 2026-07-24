@@ -20,7 +20,7 @@ namespace iwa
                 bool is_glow;
             };
 
-            struct params : widget::params, text_canvas, stylable<text>
+            struct params : widget::params, text_canvas, stylable<text::params, text>, focusable
             {
             public:
                 friend text;
@@ -28,12 +28,16 @@ namespace iwa
                 std::string_view font = "";
                 ImDrawList* drawlist = nullptr;
                 shadow_params shadow;
+                bool focused() override;
+            private:
+                ImVec2 get_text_size();
+                ImFont* get_font();
             };
-            
             
             text(const params& data);
             void render(float dt) override;
             canvas& get_canvas() override;
+            
             params data;
         protected:
             void draw(float dt) override;

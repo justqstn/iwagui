@@ -261,3 +261,25 @@ ImRect& text_canvas::compute_rect(ImVec2 text_size)
 
     return this->__rect;
 }
+
+void focusable::clear_focus()
+{
+    this->__is_entered = false;
+}
+
+void focusable::handle_focus()
+{
+    if (this->focused())
+    {
+        if (!this->__is_entered)
+        {
+            this->__is_entered = true;
+            this->enter.call();
+        }
+    }
+    else if (this->__is_entered) 
+    {
+        this->__is_entered = false;
+        this->leave.call();
+    }
+}

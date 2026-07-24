@@ -17,7 +17,20 @@ iwa::canvas& text::get_canvas()
     return this->data;
 }
 
+ImFont* text::params::get_font()
+{
+    return this->font == "" ? this->drawlist->_Data->Font : iwa::get_font(this->font);
+}
 
+bool text::params::focused()
+{
+    return this->compute_rect(this->get_text_size()).Contains(ImGui::GetMousePos());
+}
+
+ImVec2 text::params::get_text_size()
+{
+    return this->get_font()->CalcTextSizeA(this->size.get(), FLT_MAX, -1, this->text.c_str());
+}
 
 void text::render(float dt)
 {
@@ -28,16 +41,14 @@ void text::draw(float dt)
 {
     auto& params = this->data;
 
-    if (!params.enabled) return;
-
-    ImFont* font = nullptr;
-    
+    if (!params.enabled) return params.clear_focus();
     if (params.drawlist == nullptr) params.drawlist = ImGui::GetForegroundDrawList();
-    if (params.font == "") font = params.drawlist->_Data->Font; 
-    else font = iwa::get_font(params.font);
-    
-    ImVec2 text_size = font->CalcTextSizeA(params.size.get(), FLT_MAX, -1, params.text.c_str());
+
+    ImFont* font = params.get_font();
+    ImVec2 text_size = params.get_text_size();
     auto& rect = params.compute_rect(text_size);
+    params.handle_focus();
+
     if (params.shadow.distance > 0.0f)
     {
         auto shadow_position = ImVec2(cosl(params.shadow.angle), -sinl(params.shadow.angle)) * params.shadow.distance;

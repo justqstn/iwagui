@@ -10,26 +10,6 @@
 
 namespace iwa
 {
-    template <class T>
-    struct stylable
-    {
-    public:
-        using styling_fn = void (*)(T&);
-        std::vector<styling_fn> styles;
-        void style(styling_fn fn)
-        {
-            this->styles.emplace_back(fn);
-        }
-        void apply_styles(T &object)
-        {
-            for (auto fn : this->styles)
-            {
-                fn(object);
-            }
-            this->styles.clear();
-        }
-    };
-
     struct canvas
     {
     public:
@@ -90,12 +70,24 @@ namespace iwa
         float __orig_size;
     };
 
-    class parent_widget;
+    struct focusable
+    {
+    public:
+        virtual bool focused() = 0;
+        iwa::event<> enter;   // @brief Called when mouse is in widget's rect
+        iwa::event<> leave;    // @brief Called when mouse is not in widget's rect
+    protected:
+        void handle_focus();
+        void clear_focus();
+        bool __is_entered = false;
+    };
+
     class widget
     {
     public:
-        friend parent_widget;
+        friend class parent_widget;
         friend class zindex_manager;
+
         struct params
         {
         public:
@@ -103,12 +95,13 @@ namespace iwa
             ImU32 color;
             iwa::event<float> pre;  // @brief Called before rendering. @param float Delta time.
             iwa::event<float> post; // @brief Called after rendering. @param float Delta time.
-            iwa::event<> hovered;   // @brief Called when widget is hovered
             bool enabled = true;
             u_short zindex;
             void enable();
             void disable();
             void toggle();
+
+
         };
         widget();
         virtual void render(float dt) = 0;
@@ -118,10 +111,11 @@ namespace iwa
         
     protected:
         virtual void draw(float dt) = 0;
+
+        bool __id_initialized;
         unsigned int __id;
         u_short __zindex;
         u_short __parent_zindex;
-        bool __id_initialized;
     };
 
     class parent_widget : public widget
@@ -131,5 +125,50 @@ namespace iwa
         void add_widget(unsigned int id);
     protected:
         std::vector<unsigned int> __widgets;
+    };
+
+    template <class params_t, class instance_t>
+    struct stylable
+    {
+    public:
+        using style_fn = void (*)(params_t&);
+        using style_post_fn = void(*)(instance_t&);
+        
+        void style(style_fn fn)
+        {
+            fn((params_t&)*this);
+        }
+
+        void style(std::initializer_list<style_fn> list)
+        {
+            for (auto fn : list)
+            {
+                fn((params_t&)*this);
+            }
+        }
+
+        void style_post(style_post_fn fn)
+        {
+            this->__styles.emplace_back(fn);
+        }
+
+        void style_post(std::initializer_list<style_post_fn> list)
+        {
+            for (auto fn : list)
+            {
+                this->__styles.emplace_back(fn);
+            }
+        }
+
+        void apply_styles(instance_t &object)
+        {
+            for (auto fn : this->__styles)
+            {
+                fn(object);
+            }
+            this->__styles.clear();
+        }
+    protected:
+        std::vector<style_post_fn> __styles;
     };
 }

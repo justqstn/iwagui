@@ -28,20 +28,20 @@ namespace iwa
             moveable = 8
         };
 
-        struct abstract_window_params : widget::params, plane_canvas
+        struct abstract_window_params : widget::params, plane_canvas, focusable
         {
             corners_flags corners = corners_flags::none;
             float rounding = 0;
             bool clipping = true;
+            bool focused() override;
         };
 
         class window : public parent_widget
         {
         public:
-            struct params : abstract_window_params
+            struct params : abstract_window_params, stylable<params, window>
             {
                 friend window;
-                
             };
             params data;
             window(const params& data);
@@ -54,7 +54,7 @@ namespace iwa
         class head_window : public parent_widget
         {
         public:
-            struct params : abstract_window_params
+            struct params : abstract_window_params, stylable<params, head_window>
             {
                 friend head_window;
                 

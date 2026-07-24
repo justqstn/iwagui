@@ -50,6 +50,8 @@ void head_window::params::scaling()
     }
 }
 
+bool abstract_window_params::focused() { return this->compute_rect().Contains(ImGui::GetMousePos()); }
+
 void window::render(float dt)
 {
     auto& params = this->data;
@@ -87,9 +89,10 @@ void head_window::render(float dt)
 void window::draw(float dt)
 {
     auto& params = this->data;
-    if (!params.enabled) return;
+    if (!params.enabled) return params.clear_focus();
 
     auto& rect = params.compute_rect();
+    params.handle_focus();
 
     ImVec2 min = rect.Min;
     ImVec2 max = rect.Max;
@@ -117,6 +120,8 @@ void head_window::draw(float dt)
     if (!params.enabled) return;
 
     auto& rect = params.compute_rect();
+    params.handle_focus();
+
 
     ImVec2 min = rect.Min;
     ImVec2 max = rect.Max;

@@ -93,45 +93,35 @@ void ui::render(float dt)
     auto io = ImGui::GetIO();
 
 
-    static auto bg_tween_style = [](iwa::tween& tween) -> void {
-        auto& params = tween.data;
-
-        params.enabled = false; params.backwards = true;
-        params.backward_speed.value = 7.0f; 
-
-        params.forward_speed.fn = iwa::easings::in::bounce;
-        params.backward_speed.fn = iwa::easings::out::bounce;       
-
-        on_toggle_post.addcpt([&tween = tween](){ tween.enable(); tween.backward();  }); 
+    static auto bg_tween_style = [](iwa::tween::params& params) -> void {
+        params.backwards = true;
+        params.enabled = false; 
+        params.backward_speed.value = 7.0f;   
     };
-
+    static auto bg_tween_style_post = [](iwa::tween& tween) -> void { on_toggle_post.addcpt([&tween = tween](){ tween.enable(); tween.backward();  }); };
+    
     static iwa::tween sh_alpha = ({
         iwa::tween::params params;
 
         params.style(bg_tween_style);
-        params.style([](iwa::tween& tween)
-        {  
-            auto& params = tween.data;
-            params.forward_speed.value = 0.4f;
-
-            params.forward_speed.fn = iwa::easings::out::cubic;
-            params.backward_speed.fn = iwa::easings::in::cubic;   
-        });
-
+        params.style_post(bg_tween_style_post);
+        params.forward_speed.value = 0.4f;
+        params.forward_speed.fn = iwa::easings::out::cubic;
+        params.backward_speed.fn = iwa::easings::in::cubic;   
 
         params;
     });
-
     static iwa::tween bg_alpha = ({
         iwa::tween::params params;
         params.style(bg_tween_style);
+        params.style_post(bg_tween_style_post);
         params.forward_speed.value = 3.5f; 
         params;
     });
-    
     static iwa::tween g_alpha = ({
         iwa::tween::params params;
         params.style(bg_tween_style);
+        params.style_post(bg_tween_style_post);
         params.forward_speed.value = 5.0f; 
         params.on_start.add([](auto&){ vars::opened = false; });
         params;
@@ -161,6 +151,10 @@ void ui::render(float dt)
             auto drawlist = ImGui::GetForegroundDrawList();
             drawlist->AddShadowRect(rect.Min, rect.Max, (color & 0x00FFFFFF) | ((int)((color >> 24) * sh_alpha.value) << 24), 60, {0,0});
         }); 
+        
+        params.enter.add([](){ LOGI("Entered"); });
+        params.leave.add([](){ LOGI("Left"); });
+
         LOGD("Main window created");
         params;
     });
@@ -175,7 +169,7 @@ void ui::render(float dt)
         params.anchor = {0.5,0.5};
 
         params.scaling();
-        main.add_widget(widget);
+        //main.add_widget(widget);
     };
 
     static iwa::widgets::window test_window = ({
@@ -187,16 +181,16 @@ void ui::render(float dt)
         params.color = ImColor(50,50,50);
         params.clipping = false;
         params.scaling();
-        params.zindex = 100;
+       // params.zindex = 100;
 
-        main.add_widget(test_window);
+        //main.add_widget(test_window);
 
         params;
     });
     
     static iwa::widgets::text example_new = ({
         iwa::widgets::text::params params;
-        params.style(verdana_text);
+        params.style_post(verdana_text);
         params.pos = {0.25,0};
         params;
     });
@@ -204,7 +198,7 @@ void ui::render(float dt)
 
     static iwa::widgets::text example = ({
         iwa::widgets::text::params params;
-        params.style(verdana_text);
+        params.style_post(verdana_text);
         params.pos = {0.25,0.03 / 2};
         params;
         //test_window.add_widget(example_new);
@@ -213,7 +207,7 @@ void ui::render(float dt)
 
     static iwa::widgets::text example_shadowed = ({
         iwa::widgets::text::params params;
-        params.style(verdana_text);
+        params.style_post(verdana_text);
         params.pos = {0.75,0.03 / 2};
         params.shadow.angle = rad(-45); params.shadow.distance = 1.5f; params.shadow.color = ImColor(0,0,0);
         params;

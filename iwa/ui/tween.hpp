@@ -19,7 +19,7 @@ namespace iwa
     class tween
     {
     public:
-        struct params : stylable<tween>
+        struct params : stylable<params, tween>
         {
             friend tween;
             struct speed_params

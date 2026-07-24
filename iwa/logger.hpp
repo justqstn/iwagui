@@ -6,7 +6,7 @@
 
 #include <Windows.h>
 
-#define IWA_VERBOSE
+//#define IWA_VERBOSE
 #define IWA_DEBUG
 #define IWA_WARN
 #define IWA_ERROR
@@ -21,33 +21,33 @@ namespace iwa
         #define LOGV(format, ...) iwa::log("VERBOSE", 8, \
             "{%s:%i} " format, __FILE_NAME__, __LINE__ __VA_OPT__(,) __VA_ARGS__);
     #else
-        #define LOGV  
+        #define LOGV(format, ...)
     #endif 
 
     #ifdef IWA_DEBUG
         #define LOGD(format, ...) iwa::log("DEBUG", 8, \
             "{%s:%i} " format, __FILE_NAME__, __LINE__ __VA_OPT__(,) __VA_ARGS__);
     #else
-        #define LOGD  
+        #define LOGD(format, ...)  
     #endif   
 
     #ifdef IWA_WARN
         #define LOGW(format, ...) iwa::log("WARN", FOREGROUND_RED | FOREGROUND_GREEN,\
              "{%s:%i} " format, __FILE_NAME__, __LINE__ __VA_OPT__(,) __VA_ARGS__);
     #else
-        #define LOGW
+        #define LOGW(format, ...)
     #endif   
 
     #ifdef IWA_ERROR
         #define LOGE(format, ...) iwa::log("ERROR", FOREGROUND_RED,\
              "{%s:%i} " format, __FILE_NAME__, __LINE__ __VA_OPT__(,) __VA_ARGS__);
     #else
-        #define LOGE
+        #define LOGE(format, ...)
     #endif   
 
     #ifdef IWA_INFO
         #define LOGI(format, ...) iwa::log("INFO", 15, "{%s:%i} " format, __FILE_NAME__, __LINE__ __VA_OPT__(,) __VA_ARGS__);
     #else
-        #define LOGI
+        #define LOGI(format, ...)
     #endif   
 }
