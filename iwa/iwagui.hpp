@@ -9,3 +9,6 @@
 #include "ui/widgets.hpp"
 #include "ui/windows.hpp"
 #include "ui/text.hpp"
+#include "ui/font.hpp"
+#include "imgui.h"
+#include "imgui_internal.h"

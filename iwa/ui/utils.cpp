@@ -7,7 +7,7 @@ ImVec2 iwa::get_screen_resolution()
     RECT desktop;
     const HWND hDesktop = GetDesktopWindow();
     GetWindowRect(hDesktop, &desktop);
-    return {desktop.right, desktop.bottom};
+    return {(float)desktop.right, (float)desktop.bottom};
 }
 
 ImColor iwa::apply_alpha(ImColor src, float alpha)
@@ -67,4 +67,39 @@ void iwa::scaled_float::scaling()
 {
     this->scaled = true;
     this->__is_recomputing = true;
+}
+
+ImVec2 ratio(ImVec2 vec, ImVec2 aspects)
+{
+    auto resolution = iwa::get_screen_resolution();
+    float aspect_ratio;
+    if (resolution.x >= resolution.y)
+    {
+        aspect_ratio = resolution.y / resolution.x;
+        return {vec.x * aspect_ratio * aspects.y / aspects.x, vec.y};
+    }   
+    else
+    {   
+        aspect_ratio = resolution.x / resolution.y;
+        return {vec.x, vec.y * aspect_ratio * aspects.x / aspects.y};
+    }
+}
+
+
+ImRect ratio(const ImRect& rect, ImVec2 aspects)
+{
+    auto resolution = iwa::get_screen_resolution();
+    
+    return {ratio(rect.Min, aspects), ratio(rect.Max, aspects)};
+}
+
+
+long double rad(long double deg)
+{
+    return deg * M_PI / 180.0; 
+}
+
+long double deg(long double rad)
+{
+    return (rad / M_PI) * 180.0;
 }

@@ -5,6 +5,7 @@
 #include "imgui_internal.h"
 #include <vector>
 
+// goofy ah macros
 #define DEBUG_RECT(rect) ImGui::GetForegroundDrawList()->AddRect(rect.Min, rect.Max, ImColor(255,0,0));
 
 namespace iwa
@@ -34,4 +35,10 @@ namespace iwa
 
     ImColor apply_alpha(ImColor src);
     ImColor apply_alpha(ImColor src, float alpha);
+    
 }
+
+long double rad(long double deg);
+long double deg(long double rad);
+ImVec2 ratio(ImVec2 vec, ImVec2 aspects);
+ImRect ratio(const ImRect& rect, ImVec2 aspects);

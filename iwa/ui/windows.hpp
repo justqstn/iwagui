@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "imgui.h"
 #include "bases.hpp"
@@ -27,25 +28,33 @@ namespace iwa
             moveable = 8
         };
 
-        class window : widget
+        struct abstract_window_params : widget::params, plane_canvas
         {
-        public:
-            struct params : plane_canvas, widget::params
-            {
-                friend window;
-                corners_flags corners = corners_flags::none;
-                float rounding = 0;
-                // void render(float dt);
-            };
-            params data;
+            corners_flags corners = corners_flags::none;
+            float rounding = 0;
+            bool clipping = true;
         };
 
-        class begin : widget
+        class window : public widget, public parent
         {
         public:
-            struct params : window::params
+            struct params : abstract_window_params
             {
-                friend begin;
+                friend window;
+                
+            };
+            params data;
+            window(const params& data);
+            void render(float dt) override;
+            canvas& get_canvas() override; 
+        };
+
+        class head_window : public widget, public parent
+        {
+        public:
+            struct params : abstract_window_params
+            {
+                friend head_window;
                 
                 std::string header;
                 iwa::scaled_float header_thickness;
@@ -56,8 +65,9 @@ namespace iwa
                 void scaling();
             };
             params data;
-            begin(const params& data);
-            void render(float dt);
+            head_window(const params& data);
+            void render(float dt) override;
+            canvas& get_canvas() override;
         };
     }
 }

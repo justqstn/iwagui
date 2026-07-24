@@ -21,4 +21,4 @@ target_link_libraries(main PUBLIC
     dwmapi
 )
 
-target_compile_options(main PUBLIC -Oz -flto)
+target_compile_options(main PUBLIC -Oz -flto=auto)

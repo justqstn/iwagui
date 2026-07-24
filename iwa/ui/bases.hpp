@@ -36,11 +36,12 @@ namespace iwa
         ImVec2 pos = {100,100};
         ImVec2 anchor = {0,0};
         bool scaled_pos = false;
+
         void pos_scaling();
         void set_bounds(const ImRect& rect);
         void set_anchor(ImVec2 anchor);
-        ImVec2 compute(float x, float y);
-        ImVec2 compute(ImVec2 vec);
+        ImVec2 compute_pos(ImVec2 vec);
+        ImVec2 compute_size(ImVec2 vec);
         void set_pos(ImVec2 pos);
         void set_pos(float x, float y);
         
@@ -55,22 +56,32 @@ namespace iwa
     struct plane_canvas : canvas
     {
     public:
-        ImVec2 size = {100,100};        
+        ImRect padding;
+        ImVec2 size = {100,100};
+        bool scaled_size = false;
+        bool scaled_padding = false;
+
         void set_size(ImVec2 size);
         void set_size(float value);
         void set_size(float x, float y);
+        void set_padding(const ImRect& rect);
         void size_scaling();
+        void padding_scaling();
         void scaling();
-        ImRect& compute_rect(); // @todo Get rid of getters
-        bool scaled_size = false;
+        ImRect& compute_rect();
+        ImRect& compute_padding();
     protected:
         ImVec2 __orig_size;
+        ImRect __orig_padding;
+        bool __recomputing_padding;
+        bool __saved_padding_original;
     };
 
     struct text_canvas : canvas
     {
     public:
         iwa::scaled_float size;
+
         void size_scaling();
         void scaling();
         void set_size(float value);
@@ -86,11 +97,25 @@ namespace iwa
         {
             friend widget;
             ImU32 color;
-            iwa::event<float> pre; // @brief Called before rendering. @param float Delta time.
+            iwa::event<float> pre;  // @brief Called before rendering. @param float Delta time.
             iwa::event<float> post; // @brief Called after rendering. @param float Delta time.
         };
+        widget();
         virtual void render(float dt) = 0;
+        virtual canvas& get_canvas() = 0;
+        static widget* get(unsigned int id);
+        unsigned int get_id();
     protected:
-        unsigned int id;
+        unsigned int __id;
+        bool __id_initialized;
+    };
+
+    class parent
+    {
+    public:
+        void add_widget(widget& object);
+        void add_widget(unsigned int id);
+    protected:
+        std::vector<unsigned int> __widgets;
     };
 }

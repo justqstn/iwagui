@@ -9,30 +9,45 @@
 
 using namespace iwa::widgets;
 
-// silly macro cuz why not
-#define RENDER(widget, dt) widget->params.pre.call(dt); widget->render(dt); widget->params.post.call(dt);
+std::vector<head_window*> head_windows;
 
-std::vector<begin*> begins;
-
-begin::begin(const begin::params& data)
+head_window::head_window(const head_window::params& data)
 {
     this->data = data;
-    this->data.set_bounds({{0,0}, get_screen_resolution()});
-    if (this->data.header_thickness.scaled) this->data.header_thickness.factor(this->data.size.y);
-    begins.emplace_back(this);
+    if (this->data.__bounds.GetArea() == 0) this->data.set_bounds({{0,0}, get_screen_resolution()});
+    this->data.compute_rect();
+    this->data.header_thickness.factor(this->data.size.y);
 }
 
-void begin::params::scaling()
+window::window(const window::params& data)
+{
+    this->data = data;
+    if (this->data.__bounds.GetArea() == 0) this->data.set_bounds({{0,0}, get_screen_resolution()});
+    this->data.compute_rect();
+}
+
+iwa::canvas& window::get_canvas()
+{
+    return this->data;
+}
+
+iwa::canvas& head_window::get_canvas()
+{
+    return this->data;
+}
+
+void head_window::params::scaling()
 {
     this->pos_scaling();
     this->size_scaling();
+    this->padding_scaling();
     if (this->header_thickness.value != 0.0f)
     {
         this->header_thickness.scaling();
     }
 }
 
-void begin::render(const float dt)
+void window::render(float dt)
 {
     auto& params = this->data;
     auto& rect = params.compute_rect();
@@ -41,7 +56,30 @@ void begin::render(const float dt)
     auto drawlist = ImGui::GetForegroundDrawList();
     params.pre.call(dt);
 
-    drawlist->PushClipRect(min, max);
+    if (params.clipping) drawlist->PushClipRect(min, max);
+    drawlist->AddRectFilled(min, max, iwa::apply_alpha(params.color), params.rounding);
+
+    for (auto object_id : this->__widgets)
+    {
+        auto object = widget::get(object_id);
+        object->get_canvas().set_bounds(rect);
+        object->render(dt);
+    }
+
+    if (params.clipping) drawlist->PopClipRect();
+    params.post.call(dt);
+}
+
+void head_window::render(float dt)
+{
+    auto& params = this->data;
+    auto& rect = params.compute_rect();
+    ImVec2 min = rect.Min;
+    ImVec2 max = rect.Max;
+    auto drawlist = ImGui::GetForegroundDrawList();
+    params.pre.call(dt);
+
+    if (params.clipping) drawlist->PushClipRect(min, max);
     drawlist->AddRectFilled(min, max, iwa::apply_alpha(params.color), params.rounding);
 
     params.header_thickness.factor(params.size.y);
@@ -66,7 +104,13 @@ void begin::render(const float dt)
         drawlist->AddRect(min, max, iwa::apply_alpha(params.outline_color), 0.0f, ImDrawFlags_None, 1.0f);
     }
 
-    drawlist->PopClipRect();
+    for (auto object_id : this->__widgets)
+    {
+        auto object = widget::get(object_id);
+        object->get_canvas().set_bounds(params.compute_padding());
+        object->render(dt);
+    }
+
+    if (params.clipping) drawlist->PopClipRect();
     params.post.call(dt);
 }
-

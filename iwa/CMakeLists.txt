@@ -19,4 +19,4 @@ target_include_directories(iwagui PUBLIC
     ./ui
 )
 
-target_compile_options(iwagui PRIVATE -O3 -flto)
+target_compile_options(iwagui PRIVATE -O3 -flto=auto)

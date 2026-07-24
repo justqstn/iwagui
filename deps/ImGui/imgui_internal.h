@@ -593,6 +593,7 @@ struct IMGUI_API ImRect
     constexpr ImRect(const ImVec2& min, const ImVec2& max)    : Min(min), Max(max)                {}
     constexpr ImRect(const ImVec4& v)                         : Min(v.x, v.y), Max(v.z, v.w)      {}
     constexpr ImRect(float x1, float y1, float x2, float y2)  : Min(x1, y1), Max(x2, y2)          {}
+    bool operator==(const ImRect& rect)                  { return rect.Min == this->Min && rect.Max == this->Max; }
 
     ImVec2      GetCenter() const                   { return ImVec2((Min.x + Max.x) * 0.5f, (Min.y + Max.y) * 0.5f); }
     ImVec2      GetSize() const                     { return ImVec2(Max.x - Min.x, Max.y - Min.y); }

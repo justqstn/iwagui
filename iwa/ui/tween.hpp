@@ -8,6 +8,52 @@
 namespace iwa
 {
     using easing_fn = float(*)(float);
+
+    namespace easings // Used easing formulas from https://easings.net. You can check how every of them looks.
+    {
+        float linear(float x);
+        namespace out
+        {
+            float sine(float x);
+            float cubic(float x);
+            float quint(float x);
+            float circ(float x);
+            float elastic(float x);
+            float quad(float x);
+            float quart(float x);
+            float expo(float x);
+            float back(float x);
+            float bounce(float x);
+        }
+        namespace in
+        {
+            float sine(float x);
+            float cubic(float x);
+            float quint(float x);
+            float circ(float x);
+            float elastic(float x);
+            float quad(float x);
+            float quart(float x);
+            float expo(float x);
+            float back(float x);
+            float bounce(float x);
+        }
+
+        namespace inout
+        {           
+            float sine(float x);
+            float cubic(float x);
+            float quint(float x);
+            float circ(float x);
+            float elastic(float x);
+            float quad(float x);
+            float quart(float x);
+            float expo(float x);
+            float back(float x);
+            float bounce(float x);
+        }
+    }
+
     enum tween_type
     {
         none = 2,
@@ -18,7 +64,7 @@ namespace iwa
     class tween
     {
     public:
-        struct params : public stylable<tween>
+        struct params : stylable<tween>
         {
             friend tween;
             struct speed_params
@@ -27,8 +73,6 @@ namespace iwa
                 easing_fn fn = nullptr;
             };
         public:
-            float start = 0.0f;
-            float end = 1.0f;
             float time = 0.0f;
             speed_params forward_speed = {1.0f, nullptr};
             speed_params backward_speed = {1.0f, nullptr}; 
