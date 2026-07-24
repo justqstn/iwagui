@@ -13,7 +13,6 @@ unsigned int widget::get_id()
 {
     if (!this->__id_initialized)
     {
-        LOGI("realitat %p", this);
         this->__id_initialized = true;
         widgets.emplace_back(this);
         this->__id = widgets.size();

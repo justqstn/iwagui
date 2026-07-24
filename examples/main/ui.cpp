@@ -70,7 +70,7 @@ private:
         }
         
         window.data.post.addcpt([&value = this->progress->value](float dt) -> void {
-   
+            
         });
     }
 
@@ -100,7 +100,7 @@ void ui::render(float dt)
         params.backward_speed.value = 7.0f; 
 
         params.forward_speed.fn = iwa::easings::in::bounce;
-        params.backward_speed.fn = iwa::easings::out::bounce;   
+        params.backward_speed.fn = iwa::easings::out::bounce;       
 
         on_toggle_post.addcpt([&tween = tween](){ tween.enable(); tween.backward();  }); 
     };
