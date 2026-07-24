@@ -33,7 +33,7 @@ ui::ui()
 class snake_outline
 {
 public:
-    snake_outline(iwa::widgets::head_window& window, float length, float speed, bool backwards) : length(length), backwards(backwards)
+    snake_outline(iwa::head_window& window, float length, float speed, bool backwards) : length(length), backwards(backwards)
     {
         iwa::tween::params params;
         params.forward_speed.value = speed;
@@ -43,15 +43,14 @@ public:
         progress = new iwa::tween(params);
         this->init(window);
     }
-    snake_outline(iwa::widgets::head_window& window, float length, const iwa::tween& tween, bool backwards) : length(length), backwards(backwards)
+    snake_outline(iwa::head_window& window, float length, const iwa::tween& tween, bool backwards) : length(length), backwards(backwards)
     {
         progress = new iwa::tween(tween);
         this->init(window);
     }
 private:
-    void init(iwa::widgets::head_window& window)
+    void init(iwa::head_window& window)
     {
-
         this->max = (window.data.size.x + window.data.size.y) * 2;
         
         if (this->backwards)
@@ -129,8 +128,8 @@ void ui::render(float dt)
    
 
     
-    static iwa::widgets::head_window main = ({
-        iwa::widgets::head_window::params params;
+    static iwa::head_window main = ({
+        iwa::head_window::params params;
 
         params.color = ImColor(25, 25, 25);
         params.header_color = ImColor(19,19,19); params.header_line_color = ImColor(177, 177, 177, 45);
@@ -152,14 +151,60 @@ void ui::render(float dt)
             drawlist->AddShadowRect(rect.Min, rect.Max, (color & 0x00FFFFFF) | ((int)((color >> 24) * sh_alpha.value) << 24), 60, {0,0});
         }); 
         
-        params.enter.add([](){ LOGI("Entered"); });
+        params.enter.addcpt([](){ LOGI("Entered"); });
         params.leave.add([](){ LOGI("Left"); });
 
         LOGD("Main window created");
         params;
     });
 
-    static auto verdana_text = [](iwa::widgets::text& widget)
+    static auto test_button_style = [](iwa::button::params& params) -> void{ 
+        params.pos = {0.5,0.5};
+        params.anchor = {0.5,0.5};
+        params.size = {0.1,0.1};
+        params.scaling();
+        params.color = ImColor(100,100,100);        
+    };
+
+    static auto test_button_style_post = [](iwa::button& button) -> void 
+    {
+        button.data.down.addcpt([&](){
+            auto& params = button.data;
+            LOGI("down");
+            params.color = ImColor(0,0,0);
+        });
+
+        button.data.up.addcpt([&](){
+            auto& params = button.data;
+            LOGI("up");
+            params.color = ImColor(100,100,100);
+        });
+
+        main.add_widget(button);
+    };
+
+    static iwa::button test_button = ({
+        iwa::button::params params;
+
+        params.style_post(test_button_style_post);
+        params.style(test_button_style);
+        
+        params;
+    });
+
+    static iwa::button test_button2 = ({
+        iwa::button::params params;
+
+        params.style_post(test_button_style_post);
+        params.style(test_button_style);
+        params.pos += {.025,.025};
+        params.zindex = 100;
+        
+        
+        params;
+    });
+
+    static auto verdana_text = [](iwa::text& widget)
     {
         auto& params = widget.data;
         params.text = "Test text";
@@ -172,8 +217,8 @@ void ui::render(float dt)
         //main.add_widget(widget);
     };
 
-    static iwa::widgets::window test_window = ({
-        iwa::widgets::window::params params;
+    static iwa::window test_window = ({
+        iwa::window::params params;
 
         params.pos = {0.5,0.5};
         params.anchor = {0.5,0.5};
@@ -188,16 +233,16 @@ void ui::render(float dt)
         params;
     });
     
-    static iwa::widgets::text example_new = ({
-        iwa::widgets::text::params params;
+    static iwa::text example_new = ({
+        iwa::text::params params;
         params.style_post(verdana_text);
         params.pos = {0.25,0};
         params;
     });
 
 
-    static iwa::widgets::text example = ({
-        iwa::widgets::text::params params;
+    static iwa::text example = ({
+        iwa::text::params params;
         params.style_post(verdana_text);
         params.pos = {0.25,0.03 / 2};
         params;
@@ -205,8 +250,8 @@ void ui::render(float dt)
         params;
     });
 
-    static iwa::widgets::text example_shadowed = ({
-        iwa::widgets::text::params params;
+    static iwa::text example_shadowed = ({
+        iwa::text::params params;
         params.style_post(verdana_text);
         params.pos = {0.75,0.03 / 2};
         params.shadow.angle = rad(-45); params.shadow.distance = 1.5f; params.shadow.color = ImColor(0,0,0);
@@ -214,7 +259,7 @@ void ui::render(float dt)
     });
 
 
-    //LOGE("%s", ((iwa::widgets::text*)example.ptr())->data.text.data());
+    //LOGE("%s", ((iwa::text*)example.ptr())->data.text.data());
     
 
 
@@ -295,7 +340,7 @@ void ui::render(float dt)
     if (vars::opened)
     {
         ImGui::GetBackgroundDrawList()->AddRectFilled({0,0}, {4000,4000}, ImColor(0.0f, 0.0f, 0.0f, bg_alpha.value));
-        main.render(dt);
+        main.render();
         iwa::zindex_manager::get_instance()->render(dt);
     }
     else

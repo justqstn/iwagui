@@ -4,12 +4,13 @@
 #include "zindex_manager.hpp"
 #include "font.hpp"
 
-using namespace iwa::widgets;
+using namespace iwa;
 
 text::text(const text::params& data)
 {
     this->data = data;
     this->data.apply_styles(*this);
+    this->__zindex = this->data.zindex;
 }
 
 iwa::canvas& text::get_canvas()
@@ -32,9 +33,9 @@ ImVec2 text::params::get_text_size()
     return this->get_font()->CalcTextSizeA(this->size.get(), FLT_MAX, -1, this->text.c_str());
 }
 
-void text::render(float dt)
+void text::render()
 {
-    zindex_manager::get_instance()->push(this);
+    if (this->data.enabled) zindex_manager::get_instance()->push(this);
 }
 
 void text::draw(float dt)

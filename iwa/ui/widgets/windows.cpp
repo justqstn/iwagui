@@ -8,11 +8,11 @@
 #include "logger.hpp"
 #include "utils.hpp"
 
-using namespace iwa::widgets;
+using namespace iwa;
 
 std::vector<head_window*> head_windows;
 
-head_window::head_window(const head_window::params& data)
+head_window::head_window(const head_window::params& data) 
 {
     this->data = data;
     if (this->data.__bounds.GetArea() == 0) this->data.set_bounds({{0,0}, get_screen_resolution()});
@@ -52,10 +52,10 @@ void head_window::params::scaling()
 
 bool abstract_window_params::focused() { return this->compute_rect().Contains(ImGui::GetMousePos()); }
 
-void window::render(float dt)
+void window::render()
 {
     auto& params = this->data;
-    if (!params.enabled) return;
+    if (!params.enabled) return params.clear_focus();
 
     auto zindexator = zindex_manager::get_instance();
 
@@ -69,11 +69,11 @@ void window::render(float dt)
     }
 }
 
-void head_window::render(float dt)
+void head_window::render()
 {
     auto& params = this->data;
-    if (!params.enabled) return;
-
+    if (!params.enabled) return params.clear_focus();
+    
     auto zindexator = zindex_manager::get_instance();
 
     zindexator->push(this);
@@ -82,6 +82,7 @@ void head_window::render(float dt)
     {
         auto object = widget::get(object_id);
         object->get_canvas().set_bounds(params.compute_padding());
+        object->render();
         zindexator->push(object);
     }
 }
@@ -89,7 +90,6 @@ void head_window::render(float dt)
 void window::draw(float dt)
 {
     auto& params = this->data;
-    if (!params.enabled) return params.clear_focus();
 
     auto& rect = params.compute_rect();
     params.handle_focus();
@@ -107,7 +107,7 @@ void window::draw(float dt)
     {
         auto object = widget::get(object_id);
         object->get_canvas().set_bounds(rect);
-        object->render(dt);
+        object->render();
     }
 
     if (params.clipping) drawlist->PopClipRect();
