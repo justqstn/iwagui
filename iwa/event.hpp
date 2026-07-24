@@ -67,6 +67,7 @@ namespace iwa
             });
         }
     private:
+        // @todo: here is bad memory using
         std::vector<callback_t> functions;
         std::vector<cptcallback_t> cptfunctions;
     };

@@ -35,7 +35,7 @@ namespace iwa
             bool clipping = true;
         };
 
-        class window : public widget, public parent
+        class window : public parent_widget
         {
         public:
             struct params : abstract_window_params
@@ -47,9 +47,11 @@ namespace iwa
             window(const params& data);
             void render(float dt) override;
             canvas& get_canvas() override; 
+        protected:
+            void draw(float dt) override;
         };
 
-        class head_window : public widget, public parent
+        class head_window : public parent_widget
         {
         public:
             struct params : abstract_window_params
@@ -68,6 +70,8 @@ namespace iwa
             head_window(const params& data);
             void render(float dt) override;
             canvas& get_canvas() override;
+        protected:
+            void draw(float dt) override;
         };
     }
 }

@@ -4,6 +4,7 @@
 
 #include "logger.hpp"
 #include "utils.hpp"
+#include "zindex_manager.hpp"
 #include "ui/interactables.hpp"
 #include "ui/tween.hpp"
 #include "ui/widgets.hpp"

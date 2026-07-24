@@ -121,7 +121,6 @@ void ui::render(float dt)
 
         params;
     });
-    
 
     static iwa::tween bg_alpha = ({
         iwa::tween::params params;
@@ -176,7 +175,7 @@ void ui::render(float dt)
         params.anchor = {0.5,0.5};
 
         params.scaling();
-        //main.add_widget(widget);
+        main.add_widget(widget);
     };
 
     static iwa::widgets::window test_window = ({
@@ -188,6 +187,7 @@ void ui::render(float dt)
         params.color = ImColor(50,50,50);
         params.clipping = false;
         params.scaling();
+        params.zindex = 100;
 
         main.add_widget(test_window);
 
@@ -302,7 +302,7 @@ void ui::render(float dt)
     {
         ImGui::GetBackgroundDrawList()->AddRectFilled({0,0}, {4000,4000}, ImColor(0.0f, 0.0f, 0.0f, bg_alpha.value));
         main.render(dt);
-        
+        iwa::zindex_manager::get_instance()->render(dt);
     }
     else
     {

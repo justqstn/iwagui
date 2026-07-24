@@ -1,6 +1,7 @@
 #include "text.hpp"
 #include "imgui.h"
 #include "imgui_internal.h"
+#include "zindex_manager.hpp"
 #include "font.hpp"
 
 using namespace iwa::widgets;
@@ -16,9 +17,18 @@ iwa::canvas& text::get_canvas()
     return this->data;
 }
 
+
+
 void text::render(float dt)
 {
+    zindex_manager::get_instance()->push(this);
+}
+
+void text::draw(float dt)
+{
     auto& params = this->data;
+
+    if (!params.enabled) return;
 
     ImFont* font = nullptr;
     

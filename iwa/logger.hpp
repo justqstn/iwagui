@@ -6,6 +6,7 @@
 
 #include <Windows.h>
 
+#define IWA_VERBOSE
 #define IWA_DEBUG
 #define IWA_WARN
 #define IWA_ERROR
@@ -15,6 +16,13 @@ namespace iwa
 {
     void log(const char* type, char code, const char* format, ...);
     void savelogs();
+
+    #ifdef IWA_VERBOSE
+        #define LOGV(format, ...) iwa::log("VERBOSE", 8, \
+            "{%s:%i} " format, __FILE_NAME__, __LINE__ __VA_OPT__(,) __VA_ARGS__);
+    #else
+        #define LOGV  
+    #endif 
 
     #ifdef IWA_DEBUG
         #define LOGD(format, ...) iwa::log("DEBUG", 8, \

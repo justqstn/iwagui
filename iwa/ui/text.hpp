@@ -35,6 +35,8 @@ namespace iwa
             void render(float dt) override;
             canvas& get_canvas() override;
             params data;
+        protected:
+            void draw(float dt) override;
         };
     }
 }

@@ -90,27 +90,41 @@ namespace iwa
         float __orig_size;
     };
 
+    class parent_widget;
     class widget
     {
     public:
+        friend parent_widget;
+        friend class zindex_manager;
         struct params
         {
+        public:
             friend widget;
             ImU32 color;
             iwa::event<float> pre;  // @brief Called before rendering. @param float Delta time.
             iwa::event<float> post; // @brief Called after rendering. @param float Delta time.
+            iwa::event<> hovered;   // @brief Called when widget is hovered
+            bool enabled = true;
+            u_short zindex;
+            void enable();
+            void disable();
+            void toggle();
         };
         widget();
         virtual void render(float dt) = 0;
         virtual canvas& get_canvas() = 0;
         static widget* get(unsigned int id);
         unsigned int get_id();
+        
     protected:
+        virtual void draw(float dt) = 0;
         unsigned int __id;
+        u_short __zindex;
+        u_short __parent_zindex;
         bool __id_initialized;
     };
 
-    class parent
+    class parent_widget : public widget
     {
     public:
         void add_widget(widget& object);

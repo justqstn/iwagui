@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "imgui_internal.h"
+#include "zindex_manager.hpp"
 #include "logger.hpp"
 #include "utils.hpp"
 
@@ -17,6 +18,7 @@ head_window::head_window(const head_window::params& data)
     if (this->data.__bounds.GetArea() == 0) this->data.set_bounds({{0,0}, get_screen_resolution()});
     this->data.compute_rect();
     this->data.header_thickness.factor(this->data.size.y);
+    this->__zindex = this->data.zindex;
 }
 
 window::window(const window::params& data)
@@ -24,6 +26,7 @@ window::window(const window::params& data)
     this->data = data;
     if (this->data.__bounds.GetArea() == 0) this->data.set_bounds({{0,0}, get_screen_resolution()});
     this->data.compute_rect();
+    this->__zindex = this->data.zindex;
 }
 
 iwa::canvas& window::get_canvas()
@@ -50,9 +53,47 @@ void head_window::params::scaling()
 void window::render(float dt)
 {
     auto& params = this->data;
+    if (!params.enabled) return;
+
+    auto zindexator = zindex_manager::get_instance();
+
+    zindexator->push(this);
+
+    for (auto object_id : this->__widgets)
+    {
+        auto object = widget::get(object_id);
+        object->get_canvas().set_bounds(params.compute_padding());
+        zindexator->push(object);
+    }
+}
+
+void head_window::render(float dt)
+{
+    auto& params = this->data;
+    if (!params.enabled) return;
+
+    auto zindexator = zindex_manager::get_instance();
+
+    zindexator->push(this);
+
+    for (auto object_id : this->__widgets)
+    {
+        auto object = widget::get(object_id);
+        object->get_canvas().set_bounds(params.compute_padding());
+        zindexator->push(object);
+    }
+}
+
+void window::draw(float dt)
+{
+    auto& params = this->data;
+    if (!params.enabled) return;
+
     auto& rect = params.compute_rect();
+
     ImVec2 min = rect.Min;
     ImVec2 max = rect.Max;
+
     auto drawlist = ImGui::GetForegroundDrawList();
     params.pre.call(dt);
 
@@ -70,12 +111,16 @@ void window::render(float dt)
     params.post.call(dt);
 }
 
-void head_window::render(float dt)
+void head_window::draw(float dt)
 {
     auto& params = this->data;
+    if (!params.enabled) return;
+
     auto& rect = params.compute_rect();
+
     ImVec2 min = rect.Min;
     ImVec2 max = rect.Max;
+
     auto drawlist = ImGui::GetForegroundDrawList();
     params.pre.call(dt);
 
@@ -102,13 +147,6 @@ void head_window::render(float dt)
     if (params.outline_color > 0)
     {
         drawlist->AddRect(min, max, iwa::apply_alpha(params.outline_color), 0.0f, ImDrawFlags_None, 1.0f);
-    }
-
-    for (auto object_id : this->__widgets)
-    {
-        auto object = widget::get(object_id);
-        object->get_canvas().set_bounds(params.compute_padding());
-        object->render(dt);
     }
 
     if (params.clipping) drawlist->PopClipRect();

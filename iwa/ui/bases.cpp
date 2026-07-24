@@ -20,6 +20,21 @@ unsigned int widget::get_id()
     return this->__id;
 }
 
+void widget::params::toggle()
+{
+    this->enabled = !this->enabled;
+}
+
+void widget::params::disable()
+{
+    this->enabled = false;
+}
+
+void widget::params::enable()
+{
+    this->enabled = true;
+}
+
 widget::widget()
 {
     this->__id = this->get_id();
@@ -32,15 +47,15 @@ widget* widget::get(unsigned int id)
     return widgets[id-1];
 }
 
-void parent::add_widget(unsigned int id)
+void parent_widget::add_widget(unsigned int id)
 {
     this->__widgets.emplace_back(id);
 }
 
-void parent::add_widget(widget& object)
+void parent_widget::add_widget(widget& object)
 {
     this->__widgets.emplace_back(object.get_id());
-    
+    object.__parent_zindex = this->__zindex;
 }
 
 void canvas::pos_scaling()
