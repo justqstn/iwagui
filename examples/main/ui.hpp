@@ -11,4 +11,5 @@ public:
     void setstyle();
     void init();
     iwa::event<> on_toggle;
-};
+    iwa::event<> on_closed;
+};  

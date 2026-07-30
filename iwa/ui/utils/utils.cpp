@@ -1,6 +1,7 @@
 #include "utils.hpp"
 #include "wtypes.h"
 #include "logger.hpp"
+#include <random>
 
 ImVec2 iwa::get_screen_resolution()
 {
@@ -21,35 +22,54 @@ ImColor iwa::apply_alpha(ImColor src)
     return iwa::apply_alpha(src, ImGui::GetStyle().Alpha);
 }
 
+iwa::scaled_float::scaled_float()
+{
+    this->value = 0.0f;
+    this->value_px = 0.0f;
+    __recomputing = true;
+}
+
 iwa::scaled_float::scaled_float(float value)
 {
     this->value = value;
-    this->__is_saved_originals = true;
-    this->__original = value;
+    this->value_px = 0.0f;
+    __recomputing = true;
 }
 
-float iwa::scaled_float::get()
+iwa::scaled_float::scaled_float(float value, float value_px)
 {
-    if (this->__is_recomputing)
+    this->value = value;
+    this->value_px = value_px;
+    __recomputing = true;
+}
+
+
+float iwa::scaled_float::compute()
+{
+    if (__recomputing)
     {
         // @todo Implement error handling (if factor is zero)
-        this->value = this->__original * this->scaling_factor;
-
-        this->__is_recomputing = false;
+        __computed = this->value_px + this->value * this->scaling_factor;
+        __recomputing = false;
     }
-    return this->value;
+    return __computed;
 }
 
 void iwa::scaled_float::set(float value)
 {
-    if (this->scaled)
-    {   
-        this->__original = value;
-        this->__is_recomputing = true;
-    }
-    else
+    if (this->value != value)
     {
         this->value = value;
+        __recomputing = true;
+    }
+}
+
+void iwa::scaled_float::set_px(float value_px)
+{
+    if (this->value_px != value_px)
+    {
+        this->value_px = value_px;
+        __recomputing = true;
     }
 }
 
@@ -57,17 +77,11 @@ void iwa::scaled_float::factor(float factor)
 {
     if (this->scaling_factor != factor)
     {
-        this->scaled = true;
         this->scaling_factor = factor;  
-        this->__is_recomputing = true;
+        __recomputing = true;
     }
 }
 
-void iwa::scaled_float::scaling()
-{
-    this->scaled = true;
-    this->__is_recomputing = true;
-}
 
 ImVec2 ratio(ImVec2 vec, ImVec2 aspects)
 {
@@ -85,7 +99,6 @@ ImVec2 ratio(ImVec2 vec, ImVec2 aspects)
     }
 }
 
-
 ImRect ratio(const ImRect& rect, ImVec2 aspects)
 {
     auto resolution = iwa::get_screen_resolution();
@@ -102,4 +115,10 @@ long double rad(long double deg)
 long double deg(long double rad)
 {
     return (rad / M_PI) * 180.0;
+}
+
+std::string iwa::random_id()
+{
+    static std::mt19937 mt{};
+    return "anon"+std::to_string(mt());
 }

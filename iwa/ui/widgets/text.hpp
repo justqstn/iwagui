@@ -8,7 +8,8 @@
 
 namespace iwa
 {
-    class text : public widget
+    class text;
+    struct text_params : abstract_widget_params, text_canvas, stylable<text_params, text>, focusable
     {
     public:
         struct shadow_params
@@ -19,29 +20,26 @@ namespace iwa
             float distance;
             bool is_glow;
         };
+        friend text;
+        std::string text;
+        std::string font;
+        shadow_params* shadow = nullptr; 
+        
+        void update_size();
 
-        struct params : widget::params, text_canvas, stylable<text::params, text>, focusable
-        {
-        public:
-            friend text;
-            std::string text;
-            std::string_view font = "";
-            ImDrawList *drawlist = nullptr;
-            shadow_params shadow;
-            bool focused() override;
+    private:
+        ImVec2& calculate_text_size() override;
+        ImFont *get_font();
+    };
 
-        private:
-            ImVec2 get_text_size();
-            ImFont *get_font();
-        };
-
-        text(const params &data);
-        void render() override;
-        canvas &get_canvas() override;
-
-        params data;
-
-    protected:
+    class text : public abstract_widget<text_params>
+    {
+    public:
+        text(text_params* data);
+        ~text();
+        void render(unsigned int parent_zindex) override;
         void draw(float dt) override;
+    protected:
+        void push_to_depth_map(unsigned int parent_zindex) override;
     };
 }

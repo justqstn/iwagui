@@ -11,8 +11,8 @@ find_library(dwmapi dwmapi)
 
 add_subdirectory(${ROOT}/iwa ${CMAKE_CURRENT_BINARY_DIR}/iwagui)
 
-aux_source_directory(. srcs)  
-add_executable(main ${srcs})
+add_executable(main main.cpp ui.cpp)
+add_executable(main_overlay main_overlay.cpp ui.cpp)
 
 target_link_libraries(main PUBLIC 
     iwagui 
@@ -21,4 +21,12 @@ target_link_libraries(main PUBLIC
     dwmapi
 )
 
-target_compile_options(main PUBLIC -Oz -flto=auto)
+target_link_libraries(main_overlay PUBLIC 
+    iwagui 
+    D3DCompiler
+    D3D11
+    dwmapi
+)
+
+target_compile_options(main PUBLIC -Ofast -flto=auto)
+target_compile_options(main_overlay PUBLIC -Ofast -flto=auto)

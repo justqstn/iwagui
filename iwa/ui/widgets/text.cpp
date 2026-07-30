@@ -1,60 +1,64 @@
 #include "text.hpp"
 #include "imgui.h"
 #include "imgui_internal.h"
-#include "zindex_manager.hpp"
+#include "depth_mapper.hpp"
 #include "font.hpp"
 
 using namespace iwa;
 
-text::text(const text::params& data)
+text::text(text_params* data) : abstract_widget(data)
 {
-    this->data = data;
-    this->data.apply_styles(*this);
-    this->__zindex = this->data.zindex;
 }
 
-iwa::canvas& text::get_canvas()
+ImFont* text_params::get_font()
 {
-    return this->data;
+    return this->font == "" ? ImGui::GetForegroundDrawList()->_Data->Font : iwa::get_font(this->font);
 }
 
-ImFont* text::params::get_font()
+ImVec2& text_params::calculate_text_size()
 {
-    return this->font == "" ? this->drawlist->_Data->Font : iwa::get_font(this->font);
+    auto new_size = get_font()->CalcTextSizeA(this->size.compute(), FLT_MAX, -1, this->text.c_str());
+    if (new_size != __text_size)
+    {
+        __text_size = new_size;
+        __recomputing = true;
+    }
+    return __text_size;
 }
 
-bool text::params::focused()
+void text::push_to_depth_map(unsigned int parent_zindex)
 {
-    return this->compute_rect(this->get_text_size()).Contains(ImGui::GetMousePos());
+    if (!data()->enabled) return;
+
+    depth_mapper::get_instance()->push(reinterpret_cast<base_widget *>(this), data()->zindex + parent_zindex);
 }
 
-ImVec2 text::params::get_text_size()
+void text::render(unsigned int parent_zindex)
 {
-    return this->get_font()->CalcTextSizeA(this->size.get(), FLT_MAX, -1, this->text.c_str());
+    data()->handle_focus(); 
+    push(parent_zindex);
 }
 
-void text::render()
+text::~text()
 {
-    if (this->data.enabled) zindex_manager::get_instance()->push(this);
+    delete data()->shadow;
 }
 
 void text::draw(float dt)
 {
-    auto& params = this->data;
+    auto params = this->data();
 
-    if (!params.enabled) return params.clear_focus();
-    if (params.drawlist == nullptr) params.drawlist = ImGui::GetForegroundDrawList();
+    if (!params->enabled) return params->clear_focus();
+    auto drawlist = ImGui::GetForegroundDrawList();
 
-    ImFont* font = params.get_font();
-    ImVec2 text_size = params.get_text_size();
-    auto& rect = params.compute_rect(text_size);
-    params.handle_focus();
+    ImFont* font = params->get_font();
+    auto& rect = params->compute_rect();
 
-    if (params.shadow.distance > 0.0f)
+    if (params->shadow)
     {
-        auto shadow_position = ImVec2(cosl(params.shadow.angle), -sinl(params.shadow.angle)) * params.shadow.distance;
-        params.drawlist->AddText(font, params.size.get(), rect.Min + shadow_position, params.shadow.color, params.text.c_str());
+        auto shadow_position = ImVec2(cosl(params->shadow->angle), -sinl(params->shadow->angle)) * params->shadow->distance;
+        drawlist->AddText(font, params->size.compute(), rect.Min + shadow_position, params->shadow->color, params->text.c_str());
     }
     
-    params.drawlist->AddText(font, params.size.get(), rect.Min, params.color, params.text.c_str());
+    drawlist->AddText(font, params->size.compute(), rect.Min, params->color, params->text.c_str());
 }

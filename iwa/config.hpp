@@ -1,1 +1,2 @@
 #define SHOW_ANCHOR_POINTS 1
+#define DEPTH_MAPPER_DEBUG 1

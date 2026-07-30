@@ -16,6 +16,9 @@
 #include <time.h>
 #include "logger.hpp"
 #include "ui.hpp"
+#include <windows.hpp>
+#include <uxtheme.h>
+#include <dwmapi.h>
 
 // Data
 static ID3D11Device*            g_pd3dDevice = nullptr;
@@ -32,6 +35,7 @@ void CreateRenderTarget();
 void CleanupRenderTarget();
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
+bool is_opened = false;
 
 // Main code
 int main(int, char**)
@@ -40,14 +44,13 @@ int main(int, char**)
 
     // Make process DPI aware and obtain main monitor scale
     ImGui_ImplWin32_EnableDpiAwareness();
-    float main_scale = ImGui_ImplWin32_GetDpiScaleForMonitor(::MonitorFromPoint(POINT{ 0, 0 }, MONITOR_DEFAULTTOPRIMARY));
+    float main_scale = 1.0f;
 
     // Create application window
     WNDCLASSEXW wc = { sizeof(wc), CS_CLASSDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, L"ImGui Example", nullptr };
     ::RegisterClassExW(&wc);
-    HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"Dear ImGui DirectX11 Example", WS_OVERLAPPEDWINDOW, 100, 100, (int)(1280 * main_scale), (int)(800 * main_scale), nullptr, nullptr, wc.hInstance, nullptr);
-    
-
+    HWND hwnd = ::CreateWindowExW(WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_LAYERED | WS_EX_TOOLWINDOW, wc.lpszClassName, L"iwa", WS_POPUP, 0, 0, (int)(2560 * main_scale), (int)(1600 * main_scale), nullptr, nullptr, wc.hInstance, nullptr);
+    SetLayeredWindowAttributes(hwnd, RGB(0,0,0), 0, LWA_ALPHA);
 
     // Initialize Direct3D
     if (!CreateDeviceD3D(hwnd))
@@ -56,6 +59,26 @@ int main(int, char**)
         ::UnregisterClassW(wc.lpszClassName, wc.hInstance);
         return 1;
     }
+
+    RECT client_area;
+    RECT window_area;
+
+    GetClientRect(hwnd, &client_area);
+    GetWindowRect(hwnd, &window_area);
+
+    POINT diff;
+    ClientToScreen(hwnd, &diff);
+
+
+
+
+    const MARGINS margins = { 
+        window_area.left + (diff.x - window_area.left),
+        window_area.top + (diff.y - window_area.top),
+        client_area.right,
+        client_area.bottom
+    };
+    DwmExtendFrameIntoClientArea(hwnd, &margins);
 
     // Show the window
     ::ShowWindow(hwnd, SW_SHOWDEFAULT);
@@ -80,6 +103,10 @@ int main(int, char**)
     ImGui_ImplWin32_Init(hwnd);
     ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
 
+    ui::get_instance()->on_closed.add([hwnd](){
+        if (is_opened) SetWindowLong(hwnd, GWL_EXSTYLE, WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_LAYERED);
+    });
+
     // Load Fonts
     // - If fonts are not explicitly loaded, Dear ImGui will select an embedded font: either AddFontDefaultVector() or AddFontDefaultBitmap().
     //   This selection is based on (style.FontSizeBase * style.FontScaleMain * style.FontScaleDpi) reaching a small threshold.
@@ -102,7 +129,7 @@ int main(int, char**)
     bool show_demo_window = true;
     bool show_another_window = false;
     //ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-    ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.0f, 1.00f);
+    ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.0f, 0.00f);
 
     // Main loop
     bool done = false;
@@ -120,6 +147,16 @@ int main(int, char**)
         }
         if (done)
             break;
+
+        if (GetAsyncKeyState(VK_F9) & 1)
+        {
+            is_opened = true;
+            ui::get_instance()->on_toggle.call();
+
+            SetWindowLong(hwnd, GWL_EXSTYLE, WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW);
+
+            SetLayeredWindowAttributes(hwnd, RGB(0,0,0), 0, LWA_ALPHA);
+        }
 
         // Handle window being minimized or screen locked
         if (g_SwapChainOccluded && g_pSwapChain->Present(0, DXGI_PRESENT_TEST) == DXGI_STATUS_OCCLUDED)
@@ -150,7 +187,8 @@ int main(int, char**)
         //ImGui::End();
         // Rendering
         ImGui::Render();
-        const float clear_color_with_alpha[4] = { clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w };
+         SetLayeredWindowAttributes(hwnd, RGB(0,0,0), 0, LWA_ALPHA);
+        const float clear_color_with_alpha[4] = { 0,0,0,0 };
         g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
         g_pd3dDeviceContext->ClearRenderTargetView(g_mainRenderTargetView, clear_color_with_alpha);
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
@@ -257,14 +295,6 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     case WM_SYSCOMMAND:
         if ((wParam & 0xfff0) == SC_KEYMENU) // Disable ALT application menu
             return 0;
-        break;
-
-    case WM_KEYDOWN:
-        if (wParam == VK_F9)
-        {
-            ui::get_instance()->on_toggle.call();
-            return 0;
-        }
         break;
     case WM_DESTROY:
         ::PostQuitMessage(0);

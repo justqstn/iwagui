@@ -4,94 +4,112 @@
 #include <vector>
 #include "logger.hpp"
 
+using namespace iwa;
+
 namespace
 {
-    std::vector<iwa::tween*> tweens;
+    std::vector<tween*> tweens;
     float __dontchange(float f)
     {
         return f;
     }
 }
 
-void iwa::tween::params::set_speed(float speed)
+inline void tween_params::enable() { this->enabled = true; } 
+inline void tween_params::disable() { this->enabled = false; }
+inline void tween_params::speed(float speed)                   
 {
     this->backward_speed.value = speed;
     this->forward_speed.value = speed;
 }
-
-
-iwa::tween::tween(const params& data)
+inline void tween_params::easing(easing_fn fn) 
 {
-    this->data = data;
-    auto& params = this->data;
-    params.apply_styles(*this);
-    if (params.forward_speed.fn == nullptr) params.forward_speed.fn = (iwa::easing_fn)(::__dontchange);
-    if (params.backward_speed.fn == nullptr) params.backward_speed.fn = (iwa::easing_fn)(::__dontchange);
+    this->backward_speed.fn = fn;
+    this->forward_speed.fn = fn;
+}
 
-    if (params.enabled)
+tween::tween(const tween_params& data)
+{
+    this->data = new tween_params(data);
+    auto params = this->data;
+    params->apply_styles(this);
+    if (params->forward_speed.fn == nullptr) params->forward_speed.fn = (easing_fn)(::__dontchange);
+    if (params->backward_speed.fn == nullptr) params->backward_speed.fn = (easing_fn)(::__dontchange);
+
+    if (params->enabled)
     {
-        if (params.backwards) params.time = 1.0f;
-        else params.time = 0.0f;
+        if (params->backwards) params->time = 1.0f;
+        else params->time = 0.0f;
     }
     
     tweens.emplace_back(this);
 
     LOGD("New tween, total count: %i", tweens.size());
 }
-void iwa::tween::reset() { this->data.time = 0.0f; }
 
-void iwa::tween::finish() { this->data.time = 1.0f; }
-
-void iwa::tween::backward() { this->data.backwards = !this->data.backwards; }
-
-void iwa::tween::enable() { this->data.enabled = true; }
-void iwa::tween::disable() { this->data.enabled = false; }
-void iwa::tween::toggle() { this->data.enabled = !this->data.enabled; }
-
-
-void iwa::tween::tick(float dt)
+tween::~tween()
 {
-    auto& params = this->data;
-    if (!params.enabled) return;
+    delete this->data->start;
+    delete this->data->end;
+    delete this->data;
+}
 
-    if (!params.backwards)
+void tween::reset() { this->data->time = 0.0f; }
+
+void tween::finish() { this->data->time = 1.0f; }
+
+void tween::backward() { this->data->backwards = !this->data->backwards; }
+
+void tween::enable() { this->data->enabled = true; }
+void tween::disable() { this->data->enabled = false; }
+void tween::toggle() { this->data->enabled = !this->data->enabled; }
+
+
+void tween::tick(float dt)
+{
+    auto params = this->data;
+    if (!params->enabled) return;
+
+    if (!params->backwards)
     {
-        params.time = std::min(params.time + dt * params.forward_speed.value, 1.0f);
-        this->value = params.forward_speed.fn(params.time);
+        params->time = std::min(params->time + dt * params->forward_speed.value, 1.0f);
+        this->value = params->forward_speed.fn(params->time);
     }
     else
     {
-        params.time = std::max(params.time - dt * params.backward_speed.value, 0.0f);
-        this->value = params.backward_speed.fn(params.time);
+        params->time = std::max(params->time - dt * params->backward_speed.value, 0.0f);
+        this->value = params->backward_speed.fn(params->time);
     }
 
-    bool reached_end = params.time == 1.0f;
-    bool reached_start = params.time == 0.0f;
+    bool reached_end = params->time == 1.0f;
+    bool reached_start = params->time == 0.0f;
 
     if (reached_end || reached_start)
     {
-        if (params.tp & tween_type::repeatable)
+        if (params->tp & tween_type::repeatable)
         {
-            params.backwards = !params.backwards;
+            params->backwards = !params->backwards;
         }
-        else if (params.tp & tween_type::restartable)
+        else if (params->tp & tween_type::restartable)
         {
-            if (params.backwards)
-                params.time = 1.0f;
+            if (params->backwards)
+                params->time = 1.0f;
             else
-                params.time = 0.0f;
+                params->time = 0.0f;
         }
 
         if (reached_end && !this->__reached_end)
         {
             this->__reached_end = true;
-            params.on_end.call(*this);
+            LOGV("Event tween::end");
+            if (params->end) params->end->call(this);
         }
 
         if (reached_start && !this->__reached_start)
         {
             this->__reached_start = true;
-            params.on_start.call(*this);
+            LOGV("Event tween::start");
+            if (params->start) params->start->call(this);
         }
     }
     if (!reached_end)
@@ -100,10 +118,10 @@ void iwa::tween::tick(float dt)
         this->__reached_start = false;
 }
 
-void iwa::tween::tickall(float dt)
+void tween::tickall(float dt)
 {
     for (auto an : tweens)
     {
-        if (an->data.ticking) an->tick(dt);
+        if (an->data->ticking) an->tick(dt);
     }
 }   

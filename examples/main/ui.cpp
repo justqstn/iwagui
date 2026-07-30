@@ -4,10 +4,10 @@
 
 #include <cmath>
 #include <format>
-
+#include <optional>
 namespace vars
 {
-    bool opened = false;
+    bool rendering = false;
     bool toggled = false;
     bool first_time = true;
 }
@@ -18,68 +18,18 @@ void ui::setstyle()
 }
 
 static iwa::event<> on_toggle_post;
+static iwa::event<bool> on_toggle_rendering;
 
 ui::ui()
 {
     this->on_toggle.add([](){
-        vars::opened = true;
+        vars::rendering = true;
+        on_toggle_rendering.call(true);
         on_toggle_post.call();
         vars::first_time = false;
     });
 
     iwa::load_font("Verdana", FONTS_DIR"verdana.ttf");
-}   
-
-class snake_outline
-{
-public:
-    snake_outline(iwa::head_window& window, float length, float speed, bool backwards) : length(length), backwards(backwards)
-    {
-        iwa::tween::params params;
-        params.forward_speed.value = speed;
-        params.backward_speed.value = speed;
-        params.tp = iwa::tween_type::restartable;
-        
-        progress = new iwa::tween(params);
-        this->init(window);
-    }
-    snake_outline(iwa::head_window& window, float length, const iwa::tween& tween, bool backwards) : length(length), backwards(backwards)
-    {
-        progress = new iwa::tween(tween);
-        this->init(window);
-    }
-private:
-    void init(iwa::head_window& window)
-    {
-        this->max = (window.data.size.x + window.data.size.y) * 2;
-        
-        if (this->backwards)
-        {
-            corners[1] = window.data.size.x;
-            corners[2] = corners[1] + window.data.size.y;
-            corners[3] = corners[2] + window.data.size.x;
-            corners[0] = corners[3] + window.data.size.y;
-        }
-        else
-        {
-            corners[1] = window.data.size.y;
-            corners[2] = corners[1] + window.data.size.x;
-            corners[3] = corners[2] + window.data.size.y;
-            corners[0] = corners[3] + window.data.size.x;
-        }
-        
-        window.data.post.addcpt([&value = this->progress->value](float dt) -> void {
-            
-        });
-    }
-
-    
-    float min = 0;
-    float max;
-    float corners[4];
-    float length;
-    const iwa::tween* progress;
-    const bool backwards;
 };
 
 void ui::tick(float dt)
@@ -91,16 +41,15 @@ void ui::render(float dt)
 {
     auto io = ImGui::GetIO();
 
-
-    static auto bg_tween_style = [](iwa::tween::params& params) -> void {
-        params.backwards = true;
-        params.enabled = false; 
-        params.backward_speed.value = 7.0f;   
+    static auto bg_tween_style = [](iwa::tween_params* params) -> void {
+        params->backwards = true;
+        params->enabled = false; 
+        params->backward_speed.value = 7.0f;   
     };
-    static auto bg_tween_style_post = [](iwa::tween& tween) -> void { on_toggle_post.addcpt([&tween = tween](){ tween.enable(); tween.backward();  }); };
+    static auto bg_tween_style_post = [](iwa::tween* tween) -> void { on_toggle_post.add([tween](){ tween->enable(); tween->backward();  }); };
     
     static iwa::tween sh_alpha = ({
-        iwa::tween::params params;
+        iwa::tween_params params;
 
         params.style(bg_tween_style);
         params.style_post(bg_tween_style_post);
@@ -111,159 +60,134 @@ void ui::render(float dt)
         params;
     });
     static iwa::tween bg_alpha = ({
-        iwa::tween::params params;
+        iwa::tween_params params;
         params.style(bg_tween_style);
         params.style_post(bg_tween_style_post);
         params.forward_speed.value = 3.5f; 
         params;
-    });
+    }); 
     static iwa::tween g_alpha = ({
-        iwa::tween::params params;
+        iwa::tween_params params;
         params.style(bg_tween_style);
         params.style_post(bg_tween_style_post);
         params.forward_speed.value = 5.0f; 
-        params.on_start.add([](auto&){ vars::opened = false; });
+        params.start = new iwa::event<iwa::tween*>();
+        params.start->add([](auto){ vars::rendering = false; on_toggle_rendering.call(false); ui::get_instance()->on_closed.call(); });
         params;
     });
    
 
     
     static iwa::head_window main = ({
-        iwa::head_window::params params;
+        auto params = new iwa::head_window_params();
 
-        params.color = ImColor(25, 25, 25);
-        params.header_color = ImColor(19,19,19); params.header_line_color = ImColor(177, 177, 177, 45);
-        params.header_thickness = 0.03f;  params.header_thickness.scaling();
+        params->color = ImColor(25, 25, 25);
+        params->header_window = new iwa::window(({
+            auto params = new iwa::window_params();
 
-        params.pos = {0.5,0.5};
-        params.anchor = {0.5,0.5};
-        params.size = {0.5,0.6};
-        params.padding = ratio({ {.05,.05},{.05,.05} }, {1,1});
+            params->size = {1,0.035};
+            params->color = ImColor(190,190,190);
 
+            params;
+        }));
 
-        params.scaling();
-        params.clipping = false;
-        params.outline_color = ImColor(177, 177, 177, 45);
-        params.pre.add([](float dt){
+        params->draggable = true;
+        params->drag_canvas = params->header_window->data();
+
+        params->header_text = new iwa::text(({
+            auto params = new iwa::text_params();
+
+            params->on_pre_draw([params](auto){
+                static auto color = ImColor(0,0,0);
+                auto& rect = params->compute_rect();
+                ImGui::GetForegroundDrawList()->AddShadowRect({rect.Min.x, rect.GetCenter().y}, {rect.Max.x, rect.GetCenter().y}, iwa::apply_alpha(color, g_alpha.value), 50, {0,0}, ImDrawFlags_RoundCornersAll, 100.0f);
+            });
+            params->shadow = new iwa::text_params::shadow_params();
+            params->shadow->angle = rad(-45);
+            params->shadow->color = ImColor(128,128,128);
+            params->shadow->distance = 3.0f;
+            params->font = "Verdana";
+            params->anchor = {0.5,0.5};
+            params->size = 0.75;
+            params->pos = {0.5,0.5};
+            params->text = "IwaGui";
+            params->color = ImColor(255,255,255);
+
+            params;
+        }));
+
+        params->outline_color = ImColor(74,74,74);
+        params->header_line_color = params->outline_color;
+
+        params->header_line_thickness = 1.0f;
+
+        params->pos = {0.5,0.5};
+        params->anchor = {0.5,0.5};
+        params->size = {0.5,0.6};
+        params->padding = ratio({ {.05,.05},{.05,.05} }, {1,1});
+        params->id = "main";
+
+        params->clipping = false;
+        
+        params->on_pre_draw([](float dt){
             static auto color = ImColor(225, 180, 200, 175);
-            auto& rect = main.data.compute_rect();
+            auto& rect = main.data()->compute_rect();
             auto drawlist = ImGui::GetForegroundDrawList();
             drawlist->AddShadowRect(rect.Min, rect.Max, (color & 0x00FFFFFF) | ((int)((color >> 24) * sh_alpha.value) << 24), 60, {0,0});
         }); 
         
-        params.enter.addcpt([](){ LOGI("Entered"); });
-        params.leave.add([](){ LOGI("Left"); });
+        params->on_enter([](){ LOGI("Entered"); });
+        params->on_leave([](){ LOGI("Left"); });
+
+        on_toggle_rendering.add([](bool status){
+            main.data()->enabled = status;
+        });
 
         LOGD("Main window created");
         params;
     });
 
-    static auto test_button_style = [](iwa::button::params& params) -> void{ 
-        params.pos = {0.5,0.5};
-        params.anchor = {0.5,0.5};
-        params.size = {0.1,0.1};
-        params.scaling();
-        params.color = ImColor(100,100,100);        
-    };
-
-    static auto test_button_style_post = [](iwa::button& button) -> void 
+    static auto button_style = [](iwa::button_params* params)
     {
-        button.data.down.addcpt([&](){
-            auto& params = button.data;
-            LOGI("down");
-            params.color = ImColor(0,0,0);
+        params->anchor = {0.5,0.5};
+        params->pos = {0.5,0.5};
+        params->size = {0.1,0.1};
+        params->color = ImColor(255,0,0);
+        params->add_parent("main");
+        params->drawflags = ImDrawFlags_RoundCornersAll;
+        params->rounding = 20.0f;
+        params->zindex = 1;
+        params->on_released([params](){
+            params->destroy_widget();
         });
-
-        button.data.up.addcpt([&](){
-            auto& params = button.data;
-            LOGI("up");
-            params.color = ImColor(100,100,100);
-        });
-
-        main.add_widget(button);
     };
 
-    static iwa::button test_button = ({
-        iwa::button::params params;
+    static auto button_test1 = new iwa::button(({
+        auto params = new iwa::button_params();
 
-        params.style_post(test_button_style_post);
-        params.style(test_button_style);
+        params->style(button_style);
+        params->pos += ImVec2(0.025,0.025);
+        params->id = "red";
+
+
+        params;
+    }));
+
+
+    static auto button_test2 = new iwa::button(({
+        auto params = new iwa::button_params();
+
+        params->style(button_style);
+        params->pos -= ImVec2(0.025,0.025);
+        params->color = ImColor(0,255,0);
+        params->zindex += 1;
+        params->id = "green";
+
         
         params;
-    });
-
-    static iwa::button test_button2 = ({
-        iwa::button::params params;
-
-        params.style_post(test_button_style_post);
-        params.style(test_button_style);
-        params.pos += {.025,.025};
-        params.zindex = 100;
-        
-        
-        params;
-    });
-
-    static auto verdana_text = [](iwa::text& widget)
-    {
-        auto& params = widget.data;
-        params.text = "Test text";
-        params.font = "Verdana";
-        params.color = IM_COL32_WHITE;
-        params.size = 0.75f; params.size.factor(main.data.header_thickness.get());
-        params.anchor = {0.5,0.5};
-
-        params.scaling();
-        //main.add_widget(widget);
-    };
-
-    static iwa::window test_window = ({
-        iwa::window::params params;
-
-        params.pos = {0.5,0.5};
-        params.anchor = {0.5,0.5};
-        params.size = {1,1};
-        params.color = ImColor(50,50,50);
-        params.clipping = false;
-        params.scaling();
-       // params.zindex = 100;
-
-        //main.add_widget(test_window);
-
-        params;
-    });
-    
-    static iwa::text example_new = ({
-        iwa::text::params params;
-        params.style_post(verdana_text);
-        params.pos = {0.25,0};
-        params;
-    });
+    }));
 
 
-    static iwa::text example = ({
-        iwa::text::params params;
-        params.style_post(verdana_text);
-        params.pos = {0.25,0.03 / 2};
-        params;
-        //test_window.add_widget(example_new);
-        params;
-    });
-
-    static iwa::text example_shadowed = ({
-        iwa::text::params params;
-        params.style_post(verdana_text);
-        params.pos = {0.75,0.03 / 2};
-        params.shadow.angle = rad(-45); params.shadow.distance = 1.5f; params.shadow.color = ImColor(0,0,0);
-        params;
-    });
-
-
-    //LOGE("%s", ((iwa::text*)example.ptr())->data.text.data());
-    
-
-
-    static snake_outline outline(main, 100.f, 1.0f, false);
 
     /*{
         static const float snake_length = 850;
@@ -334,19 +258,20 @@ void ui::render(float dt)
         else corner_point = {0,0};
     }*/
 
-    
-
     ImGui::GetStyle().Alpha = g_alpha.value;
-    if (vars::opened)
+    if (vars::rendering)
     {
-        ImGui::GetBackgroundDrawList()->AddRectFilled({0,0}, {4000,4000}, ImColor(0.0f, 0.0f, 0.0f, bg_alpha.value));
-        main.render();
-        iwa::zindex_manager::get_instance()->render(dt);
+        ImGui::GetBackgroundDrawList()->AddRectFilled({0,0}, {4000,4000}, ImColor(0.0f, 0.0f, 0.0f, bg_alpha.value * 0.3f));
+        main.render(0);
+        
     }
     else
     {
         
     }
+
+    iwa::depth_mapper::get_instance()->input();
+    iwa::depth_mapper::get_instance()->render(dt);
 
 
 
@@ -359,5 +284,61 @@ void ui::render(float dt)
 
         drawlist->AddText(mouse_pos - ImVec2(0, -20), IM_COL32_WHITE, std::format("{} {}", scale.x, scale.y).c_str());
         drawlist->AddText(mouse_pos - ImVec2(0, 20), IM_COL32_WHITE, std::format("{} {}", mouse_pos.x, mouse_pos.y).c_str());
+        drawlist->AddText(mouse_pos + ImVec2(0, 40), IM_COL32_WHITE, iwa::depth_mapper::get_instance()->debug_information().data());
     }
 }
+
+/**
+ * class snake_outline
+{
+public:
+    snake_outline(iwa::head_window& window, float length, float speed, bool backwards) : length(length), backwards(backwards)
+    {
+        iwa::tween::params params;
+        params.forward_speed.value = speed;
+        params.backward_speed.value = speed;
+        params.tp = iwa::tween_type::restartable;
+        
+        progress = new iwa::tween(params);
+        this->init(window);
+    }
+    snake_outline(iwa::head_window& window, float length, const iwa::tween& tween, bool backwards) : length(length), backwards(backwards)
+    {
+        progress = new iwa::tween(tween);
+        this->init(window);
+    }
+private:
+    void init(iwa::head_window& window)
+    {
+        this->max = (window.data().size.x + window.data().size.y) * 2;
+        
+        if (this->backwards)
+        {
+            corners[1] = window.data().size.x;
+            corners[2] = corners[1] + window.data().size.y;
+            corners[3] = corners[2] + window.data().size.x;
+            corners[0] = corners[3] + window.data().size.y;
+        }
+        else
+        {
+            corners[1] = window.data().size.y;
+            corners[2] = corners[1] + window.data().size.x;
+            corners[3] = corners[2] + window.data().size.y;
+            corners[0] = corners[3] + window.data().size.x;
+        }
+        
+        window.data().post.add([&value = this->progress->value](float dt) -> void {
+            
+        });
+    }
+
+    
+    float min = 0;
+    float max;
+    float corners[4];
+    float length;
+    const iwa::tween* progress;
+    const bool backwards;
+};
+ * 
+ */

@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "imgui_internal.h"
-#include "zindex_manager.hpp"
+#include "depth_mapper.hpp"
 #include "logger.hpp"
 #include "utils.hpp"
 
@@ -12,148 +12,168 @@ using namespace iwa;
 
 std::vector<head_window*> head_windows;
 
-head_window::head_window(const head_window::params& data) 
+head_window::head_window(head_window_params* data) : abstract_widget(data)
 {
-    this->data = data;
-    if (this->data.__bounds.GetArea() == 0) this->data.set_bounds({{0,0}, get_screen_resolution()});
-    this->data.compute_rect();
-    this->data.header_thickness.factor(this->data.size.y);
-    this->__zindex = this->data.zindex;
-}
-
-window::window(const window::params& data)
-{
-    this->data = data;
-    if (this->data.__bounds.GetArea() == 0) this->data.set_bounds({{0,0}, get_screen_resolution()});
-    this->data.compute_rect();
-    this->__zindex = this->data.zindex;
-}
-
-iwa::canvas& window::get_canvas()
-{
-    return this->data;
-}
-
-iwa::canvas& head_window::get_canvas()
-{
-    return this->data;
-}
-
-void head_window::params::scaling()
-{
-    this->pos_scaling();
-    this->size_scaling();
-    this->padding_scaling();
-    if (this->header_thickness.value != 0.0f)
+    if (this->data()->__bounds.GetArea() == 0) this->data()->set_bounds({{0,0}, get_screen_resolution()});
+    auto& rect = this->data()->compute_rect();
+    if (this->data()->header_window != nullptr)
     {
-        this->header_thickness.scaling();
+        auto header_window = this->data()->header_window;
+        auto header_window_data = header_window->data();
+
+        header_window_data->id = this->data()->id + "_header";
+        header_window_data->set_bounds(rect);
+        header_window_data->pos = {0,0};
+        header_window_data->anchor = {0,0};
+
+        if (this->data()->drawflags & ImDrawFlags_RoundCornersTop == 0) header_window_data->drawflags = ImDrawFlags_RoundCornersTop;
+
+        header_window_data->size.x = 1;
+
+        if (this->data()->header_text != nullptr)
+        {
+            auto header_text = this->data()->header_text;
+            auto header_text_data = header_text->data();
+
+            header_text_data->id = this->data()->id + "_text";
+            header_text_data->set_bounds(header_window_data->compute_rect());
+            header_text_data->size.factor(header_window_data->compute_rect().Max.y - header_window_data->compute_rect().Min.y);
+        }
     }
 }
 
-bool abstract_window_params::focused() { return this->compute_rect().Contains(ImGui::GetMousePos()); }
-
-void window::render()
+head_window::~head_window()
 {
-    auto& params = this->data;
-    if (!params.enabled) return params.clear_focus();
+    delete data()->header_text;
+    delete data()->header_window;
+}
 
-    auto zindexator = zindex_manager::get_instance();
+window::window(window_params* data) : abstract_widget(data)
+{
+    if (this->data()->__bounds.GetArea() == 0) this->data()->set_bounds({{0,0}, get_screen_resolution()});
+    this->data()->compute_rect();
+}
 
-    zindexator->push(this);
+void window::push_to_depth_map(unsigned int parent_zindex)
+{
+    if (!data()->enabled) return;
 
-    for (auto object_id : this->__widgets)
+    depth_mapper::get_instance()->push(reinterpret_cast<base_widget *>(this), data()->zindex + parent_zindex);
+}
+
+void window::render_descendants(unsigned int parent_zindex)
+{
+    if (!data()->enabled || !data()->descendants) return;
+
+    for (auto &widget_id : *data()->descendants)
     {
-        auto object = widget::get(object_id);
-        object->get_canvas().set_bounds(params.compute_padding());
-        zindexator->push(object);
+        auto widget = widget_manager::get_instance()->get(widget_id);
+        widget->data()->set_bounds(data()->compute_rect());
+        if (widget->data()->enabled) widget->render(data()->zindex + parent_zindex);
     }
 }
 
-void head_window::render()
+void window::render(unsigned int parent_zindex)
 {
-    auto& params = this->data;
-    if (!params.enabled) return params.clear_focus();
-    
-    auto zindexator = zindex_manager::get_instance();
+    data()->handle_focus();
 
-    zindexator->push(this);
+    push(parent_zindex);
+}
 
-    for (auto object_id : this->__widgets)
+void head_window::push_to_depth_map(unsigned int parent_zindex)
+{
+    if (!data()->enabled) return;
+
+    depth_mapper::get_instance()->push(reinterpret_cast<base_widget *>(this), data()->zindex + parent_zindex);
+}
+
+
+void head_window::render_descendants(unsigned int parent_zindex)
+{
+    if (!data()->enabled || !data()->descendants) return;
+
+    for (auto &widget_id : *data()->descendants)
     {
-        auto object = widget::get(object_id);
-        object->get_canvas().set_bounds(params.compute_padding());
-        object->render();
-        zindexator->push(object);
+        auto widget = widget_manager::get_instance()->get(widget_id);
+        widget->data()->set_bounds(data()->compute_rect());
+        if (widget->data()->enabled) widget->render(data()->zindex + parent_zindex);
     }
+}
+
+
+void head_window::render(unsigned int parent_zindex)
+{
+    data()->handle_focus();
+    data()->handle_click(parent_zindex);
+    data()->handle_dragging();
+
+    push(parent_zindex);
 }
 
 void window::draw(float dt)
 {
-    auto& params = this->data;
-
-    auto& rect = params.compute_rect();
-    params.handle_focus();
+    auto params = data();
+    auto& rect = params->compute_rect();
+    params->handle_focus();
 
     ImVec2 min = rect.Min;
     ImVec2 max = rect.Max;
 
     auto drawlist = ImGui::GetForegroundDrawList();
-    params.pre.call(dt);
 
-    if (params.clipping) drawlist->PushClipRect(min, max);
-    drawlist->AddRectFilled(min, max, iwa::apply_alpha(params.color), params.rounding);
+    if (params->clipping) drawlist->PushClipRect(min, max);
 
-    for (auto object_id : this->__widgets)
-    {
-        auto object = widget::get(object_id);
-        object->get_canvas().set_bounds(rect);
-        object->render();
-    }
+    drawlist->AddRectFilled(min, max, iwa::apply_alpha(params->color), params->rounding, params->drawflags);
 
-    if (params.clipping) drawlist->PopClipRect();
-    params.post.call(dt);
+    if (params->clipping) drawlist->PopClipRect();;
 }
 
 void head_window::draw(float dt)
 {
-    auto& params = this->data;
-    if (!params.enabled) return;
+    auto params = data();
+    if (!params->enabled) return;
 
-    auto& rect = params.compute_rect();
-    params.handle_focus();
+    auto& rect = params->compute_rect();
+    params->handle_focus();
 
 
     ImVec2 min = rect.Min;
     ImVec2 max = rect.Max;
 
     auto drawlist = ImGui::GetForegroundDrawList();
-    params.pre.call(dt);
 
-    if (params.clipping) drawlist->PushClipRect(min, max);
-    drawlist->AddRectFilled(min, max, iwa::apply_alpha(params.color), params.rounding);
-
-    params.header_thickness.factor(params.size.y);
-    float header_thickness = params.header_thickness.get();
-
-    if (header_thickness > 0)
+    if (params->clipping) drawlist->PushClipRect(min, max);
+    drawlist->AddRectFilled(min, max, iwa::apply_alpha(params->color), params->rounding, params->drawflags);
+    
+    if (params->header_window != nullptr)
     {
-        drawlist->AddRectFilled(min, {max.x, min.y + header_thickness}, iwa::apply_alpha(params.header_color), 0, 0);
+        params->header_window->data()->set_bounds(rect);
+        auto& header_rect = params->header_window->data()->compute_rect();
+        params->header_window->draw(dt);
+
+        if (params->header_line_color > 0)
+        {
+            drawlist->AddRect(
+                {header_rect.Min.x + 1, header_rect.Max.y},
+                {header_rect.Max.x - 1, header_rect.Max.y + params->header_line_thickness},
+                iwa::apply_alpha(params->header_line_color));
+        }
+
+        if (params->header_text != nullptr)
+        {
+            params->header_text->data()->size.factor(header_rect.Max.y - header_rect.Min.y);
+            params->header_text->data()->set_bounds(params->header_window->data()->compute_rect());
+            if (params->header_text->data()->pre) params->header_text->data()->pre->call(dt);
+            params->header_text->draw(dt);
+            if (params->header_text->data()->post) params->header_text->data()->post->call(dt);
+
+        }
     }
 
-    if (params.header_line_color > 0)
+    if (params->outline_color > 0)
     {
-        drawlist->AddRect(
-            {min.x + 1, min.y + header_thickness}, 
-            {max.x - 1, min.y + header_thickness},
-            iwa::apply_alpha(params.header_line_color)
-        );
+        drawlist->AddRect(min, max, iwa::apply_alpha(params->outline_color), params->rounding, 1.0f, params->drawflags);
     }
 
-    if (params.outline_color > 0)
-    {
-        drawlist->AddRect(min, max, iwa::apply_alpha(params.outline_color), 0.0f, ImDrawFlags_None, 1.0f);
-    }
-
-    if (params.clipping) drawlist->PopClipRect();
-    params.post.call(dt);
+    if (params->clipping) drawlist->PopClipRect();
 }

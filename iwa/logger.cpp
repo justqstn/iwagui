@@ -13,7 +13,8 @@ void iwa::log(const char* type, char code, const char* format, ...)
     if (::logs == NULL)
     {
         freopen("CONOUT$", "w", stdout); 
-        ::logs = fopen((std::to_string((unsigned long)time(NULL)) + ".iwalog").c_str(), "w");
+        // ::logs = fopen((std::to_string((unsigned long)time(NULL)) + ".iwalog").c_str(), "w");
+        ::logs = fopen("latest.iwalog", "w");
     }
 
     HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);

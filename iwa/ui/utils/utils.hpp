@@ -4,28 +4,31 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 #include <vector>
+#include <string>
 
 // goofy ah macros
 #define DEBUG_RECT(rect) ImGui::GetForegroundDrawList()->AddRect(rect.Min, rect.Max, ImColor(255,0,0));
 
 namespace iwa
 {
+    // @todo need to refactoring
     struct scaled_float
     {
     public:
-        scaled_float(float value = 0.0f);
+        scaled_float();
+        scaled_float(float scaled);
+        scaled_float(float scaled, float value_px);
         float value;
+        float value_px;
         float scaling_factor;
-        bool scaled; 
         
-        float get();  // @todo Get rid of getters
-        void scaling();
+        float compute();
         void set(float value);
+        void set_px(float value_px);
         void factor(float factor);
     private:
-        float __original;
-        bool __is_recomputing = false;
-        bool __is_saved_originals = false;
+        float __computed;
+        bool __recomputing;
     };
 
     ImVec2 get_screen_resolution();
@@ -35,7 +38,8 @@ namespace iwa
 
     ImColor apply_alpha(ImColor src);
     ImColor apply_alpha(ImColor src, float alpha);
-    
+
+    std::string random_id();
 }
 
 long double rad(long double deg);
