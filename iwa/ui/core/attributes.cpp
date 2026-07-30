@@ -131,8 +131,9 @@ bool clickable::pressed()
 {
     static auto mapper = depth_mapper::get_instance();
     bool focused = compute_rect().Contains(ImGui::GetMousePos());
-    bool pressed = ImGui::IsMouseDown(ImGuiMouseButton_Left);
-    bool result = (pressed && focused) || (pressed && this->__down_called);
+    bool pressed = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+    bool holding = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+    bool result = (pressed && focused) || (holding && this->__down_called);
     return result;
 }
 
@@ -140,8 +141,9 @@ bool draggable::pressed()
 {
     static auto mapper = depth_mapper::get_instance();
     bool focused = drag_canvas->compute_rect().Contains(ImGui::GetMousePos());
-    bool pressed = ImGui::IsMouseDown(ImGuiMouseButton_Left);
-    bool result = (pressed && focused) || (pressed && this->__down_called); 
+    bool pressed = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
+    bool holding = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+    bool result = (pressed && focused) || (holding && this->__down_called);
     return result;
 }
 

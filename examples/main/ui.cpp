@@ -86,7 +86,7 @@ void ui::render(float dt)
             auto params = new iwa::window_params();
 
             params->size = {1,0.035};
-            params->color = ImColor(190,190,190);
+            params->color = ImColor(19,19,19);
 
             params;
         }));
