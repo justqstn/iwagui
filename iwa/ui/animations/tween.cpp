@@ -15,22 +15,12 @@ namespace
     }
 }
 
-inline void tween_params::enable() { this->enabled = true; } 
-inline void tween_params::disable() { this->enabled = false; }
-inline void tween_params::speed(float speed)                   
-{
-    this->backward_speed.value = speed;
-    this->forward_speed.value = speed;
-}
-inline void tween_params::easing(easing_fn fn) 
-{
-    this->backward_speed.fn = fn;
-    this->forward_speed.fn = fn;
-}
 
-tween::tween(const tween_params& data)
+
+tween::tween(tween_params* data)
 {
-    this->data = new tween_params(data);
+    this->data = data;
+    this->data->instance = this;
     auto params = this->data;
     params->apply_styles(this);
     if (params->forward_speed.fn == nullptr) params->forward_speed.fn = (easing_fn)(::__dontchange);

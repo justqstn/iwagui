@@ -62,10 +62,10 @@ void abstract_canvas::recompute()
 
 
 /**
- * iwa::plane_canvas implementations
+ * iwa::canvas implementations
  */ 
 
-void plane_canvas::set_size(ImVec2 size)
+void canvas::set_size(ImVec2 size)
 {
     if (this->size != size)
     {
@@ -74,7 +74,7 @@ void plane_canvas::set_size(ImVec2 size)
     }
 }
 
-void plane_canvas::set_size_px(ImVec2 size_px)
+void canvas::set_size_px(ImVec2 size_px)
 {
     if (this->size_px != size_px)
     {
@@ -83,7 +83,26 @@ void plane_canvas::set_size_px(ImVec2 size_px)
     }
 }
 
-const ImRect& plane_canvas::compute_padding()
+void window_canvas::set_padding(const ImRect& padding)
+{
+    if (this->padding != padding)
+    {
+        this->padding = padding;
+        __recomputing_padding = true;
+    }
+}
+
+void window_canvas::set_padding_px(const ImRect& padding_px)
+{
+    if (this->padding_px != padding_px)
+    {
+        this->padding_px = padding_px;
+        __recomputing_padding = true;
+    }
+}
+
+
+ImRect& window_canvas::compute_padding()
 {
     bool is_recomputing = __recomputing;
     auto& rect = compute_rect();
@@ -99,10 +118,11 @@ const ImRect& plane_canvas::compute_padding()
     return __ret_padding;
 }
 
-const ImRect& plane_canvas::compute_rect()
+ImRect& canvas::compute_rect()
 {
     if (__recomputing)
     {
+        this->__recomputing_padding = true;
         auto computed_pos = scaled_pos(pos) + this->pos_px;
         auto computed_size = scaled_size(size) + this->size_px;
 
@@ -132,7 +152,7 @@ void text_canvas::set_size(float size)
 }
 
 
-const ImRect& text_canvas::compute_rect()
+ImRect& text_canvas::compute_rect()
 {
     if (__recomputing)
     {

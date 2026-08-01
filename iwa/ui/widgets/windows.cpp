@@ -64,13 +64,21 @@ void window::push_to_depth_map(unsigned int parent_zindex)
 void window::render_descendants(unsigned int parent_zindex)
 {
     if (!data()->enabled || !data()->descendants) return;
+    auto mapper = depth_mapper::get_instance();
+    auto& bounds = data()->compute_padding();
+    auto& rect = data()->compute_rect();
+
+    if (data()->clipping) mapper->push_clip(rect);
 
     for (auto &widget_id : *data()->descendants)
     {
         auto widget = widget_manager::get_instance()->get(widget_id);
-        widget->data()->set_bounds(data()->compute_rect());
+        widget->data()->set_bounds(bounds);
         if (widget->data()->enabled) widget->render(data()->zindex + parent_zindex);
     }
+
+    if (data()->clipping) mapper->pop_clip();
+
 }
 
 void window::render(unsigned int parent_zindex)
@@ -91,21 +99,34 @@ void head_window::push_to_depth_map(unsigned int parent_zindex)
 void head_window::render_descendants(unsigned int parent_zindex)
 {
     if (!data()->enabled || !data()->descendants) return;
+    auto mapper = depth_mapper::get_instance();
+    auto bounds = data()->compute_padding();
+    auto rect = data()->compute_rect();
+    
+    if (data()->clipping) mapper->push_clip(rect);
+
+    if (data()->header_window)
+    {
+        auto hr_data = data()->header_window->data();
+        bounds.Min.y += hr_data->scaled_size(hr_data->size).y + hr_data->size_px.y;
+    }
 
     for (auto &widget_id : *data()->descendants)
     {
         auto widget = widget_manager::get_instance()->get(widget_id);
-        widget->data()->set_bounds(data()->compute_rect());
+        widget->data()->set_bounds(bounds);
         if (widget->data()->enabled) widget->render(data()->zindex + parent_zindex);
     }
+
+    if (data()->clipping) mapper->pop_clip();
 }
 
 
 void head_window::render(unsigned int parent_zindex)
 {
-    data()->handle_focus();
     data()->handle_click(parent_zindex);
     data()->handle_dragging();
+    data()->handle_focus();
 
     push(parent_zindex);
 }
@@ -121,11 +142,7 @@ void window::draw(float dt)
 
     auto drawlist = ImGui::GetForegroundDrawList();
 
-    if (params->clipping) drawlist->PushClipRect(min, max);
-
     drawlist->AddRectFilled(min, max, iwa::apply_alpha(params->color), params->rounding, params->drawflags);
-
-    if (params->clipping) drawlist->PopClipRect();;
 }
 
 void head_window::draw(float dt)
@@ -142,7 +159,6 @@ void head_window::draw(float dt)
 
     auto drawlist = ImGui::GetForegroundDrawList();
 
-    if (params->clipping) drawlist->PushClipRect(min, max);
     drawlist->AddRectFilled(min, max, iwa::apply_alpha(params->color), params->rounding, params->drawflags);
     
     if (params->header_window != nullptr)
@@ -174,6 +190,4 @@ void head_window::draw(float dt)
     {
         drawlist->AddRect(min, max, iwa::apply_alpha(params->outline_color), params->rounding, 1.0f, params->drawflags);
     }
-
-    if (params->clipping) drawlist->PopClipRect();
 }

@@ -1,2 +1,7 @@
-#define SHOW_ANCHOR_POINTS 1
-#define DEPTH_MAPPER_DEBUG 1
+
+#define IWA_DEBUG
+
+#ifdef IWA_DEBUG
+#define IWA_DEPTH_MAPPER_DEBUG
+// #define IWA_DEBUG_RENDERING
+#endif

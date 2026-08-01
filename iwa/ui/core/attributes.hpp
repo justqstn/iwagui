@@ -63,8 +63,10 @@ namespace iwa
 
     struct rect_draggable : draggable
     {
+    public:
+        ImRect drag_bounds;
     protected:
-        void handle_dragging();
+        void handle_dragging() override;
     };
 
     template <class params_t, class instance_t>

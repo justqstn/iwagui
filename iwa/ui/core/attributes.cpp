@@ -173,3 +173,61 @@ void draggable::handle_dragging()
         __click_captured = false;
     }
 }
+
+
+void rect_draggable::handle_dragging()
+{
+    auto mapper = depth_mapper::get_instance();
+
+    if (this->pressed() && mapper->__clickable == this && this->__down_called)
+    {           
+        if (!__start_called && start_drag)
+        {
+            __start_called = true;
+            start_drag->call();
+        }
+        if (__click_captured)
+        {
+            auto delta = ImGui::GetMousePos() - __click_pos;
+
+            if (drag_bounds.Min == ImVec2(0, 0) && drag_bounds.Max == ImVec2(0, 0))
+            {
+                pos_px += delta;
+                __recomputing = true;
+            }
+            else
+            {
+                auto saved_delta = delta;
+
+                pos_px += delta;
+                __recomputing = true;
+                auto &rect = compute_rect();
+
+                if (rect.Min.x < drag_bounds.Min.x)
+                    delta.x -= (rect.Min.x - drag_bounds.Min.x);
+                else if (rect.Max.x > drag_bounds.Max.x)
+                    delta.x -= (rect.Max.x - drag_bounds.Max.x);
+
+                if (rect.Min.y < drag_bounds.Min.y)
+                    delta.y -= (rect.Min.y - drag_bounds.Min.y);
+                else if (rect.Max.y > drag_bounds.Max.y)
+                    delta.y -= (rect.Max.y - drag_bounds.Max.y);
+
+                if (delta != saved_delta)
+                {
+                    pos_px -= saved_delta;
+                    pos_px += delta;
+                    __recomputing = true;
+                }
+            }
+        }
+        __click_pos = ImGui::GetMousePos();
+        __click_captured = true;
+    }
+    else
+    {
+        if (__click_captured && end_drag) end_drag->call();
+        __click_pos = {0, 0};
+        __click_captured = false;
+    }
+}

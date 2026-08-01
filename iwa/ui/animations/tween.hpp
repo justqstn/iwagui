@@ -36,19 +36,29 @@ namespace iwa
         };
 
     public:
+        tween* instance;
         float time = 0.0f;                             // Start point of an animation. Capped in range 0-1
         tween_type tp = tween_type::none;              // Type of tween animation behaviour.
         speed_params forward_speed = {1.0f, nullptr};  // Tween uses this speed if animation time goes from start to end.
         speed_params backward_speed = {1.0f, nullptr}; // Tween uses this speed if animation time goes from end to start.
-        iwa::event<iwa::tween *>* end;                  // Calls when time value reach 1.
-        iwa::event<iwa::tween *>* start;                // Calls when time value reach 0.
+        iwa::event<iwa::tween *> *end;                 // Calls when time value reach 1.
+        iwa::event<iwa::tween *> *start;               // Calls when time value reach 0.
         bool enabled = true;                           // If it's not enabled, it won't update even if tween::tick() is called.
         bool backwards = false;                        // Determines is animation directed back (time goes from 1 to 0) or forth (time goes from 0 to 1)
         bool ticking = true;                           // if true, will tick when tween::tickall() is called
-        inline void enable();                          // Binding for enabling tween.
-        inline void disable();                         // Binding for disabling tween.
-        inline void speed(float speed);                // Binding for setting speed. @note Sets the value for both speeds.
-        inline void easing(easing_fn fn);              // Binding for setting easing function. @note Sets the value for both speeds.
+
+        inline void enable() { this->enabled = true; }   // Binding for enabling tween.
+        inline void disable() { this->enabled = false; } // Binding for disabling tween.
+        inline void speed(float speed)                   // Binding for setting speed. @note Sets the value for both speeds.
+        {
+            this->backward_speed.value = speed;
+            this->forward_speed.value = speed;
+        }
+        inline void easing(easing_fn fn) // Binding for setting easing function. @note Sets the value for both speeds.
+        {
+            this->backward_speed.fn = fn;
+            this->forward_speed.fn = fn;
+        }
     };
 
     class tween
@@ -56,7 +66,7 @@ namespace iwa
     public:
         tween_params *data;                            // Tween variables and configurates.
 
-        tween(const tween_params &data);
+        tween(tween_params *data);
         ~tween();
         void reset();                               
         void finish();

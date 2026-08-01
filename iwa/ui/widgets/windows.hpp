@@ -11,7 +11,7 @@
 
 namespace iwa
 {
-    struct abstract_window_params : abstract_widget_params, plane_canvas, focusable
+    struct abstract_window_params : abstract_widget_params, window_canvas, focusable
     {
         float rounding = 0;
         ImDrawFlags drawflags = ImDrawFlags_None;
