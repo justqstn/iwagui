@@ -1,78 +1,54 @@
 #pragma once
 
-#include "imgui.h"
-#include "imgui_internal.h"
+#include "typedefs.hpp"
+#include "macroses.hpp"
 #include "utils.hpp"
-#include "event.hpp"
 
 namespace iwa
-{   
-    struct abstract_canvas
+{
+    class abstract_canvas
     {
+        COMPONENT(uint, zindex, 0)
+        CONST_COMPONENT(std::string, id, "")
+        RECOMPUTABLE_COMPONENT(rect_t, bounds, rect_t())
+        RECOMPUTABLE_COMPONENT(vec2, pos, vec2())
+        RECOMPUTABLE_COMPONENT(vec2, pos_px, vec2())
+        RECOMPUTABLE_COMPONENT(vec2, anchor, vec2())
+
     public:
-        std::string id;
-        unsigned int zindex = 0;
-        ImVec2 pos = {0.5,0.5};
-        ImVec2 pos_px = {0,0};
-        ImVec2 anchor = {0.5f,0.5f};
-
-        virtual void set_bounds(const ImRect &rect) final;
-        virtual void set_anchor(ImVec2 anchor) final;
-        virtual ImVec2 scaled_pos(ImVec2 pos) final;
-        virtual ImVec2 scaled_size(ImVec2 size) final;
-        virtual void recompute() final;
-        virtual void set_pos(ImVec2 pos) final;
-        virtual void set_pos_px(ImVec2 pos_px) final;
-
-        virtual ImRect& compute_rect() = 0;
+        virtual void recompute();
+        virtual vec2 compute_pos();
+        virtual const rect_t& compute_rect() = 0;
     protected:
-        ImRect __rect;
-        ImRect __bounds; 
-        bool __recomputing = true;
+        bool __recomputing = false;
+        bool __recomputing_padding = false;
+        rect_t __cached_rect = rect_t();
     };
 
-    struct canvas : virtual abstract_canvas
-    {
-    public:
-        ImVec2 size = {0.5,0.5};
-        ImVec2 size_px = {0,0};
-
-        void set_size(ImVec2 size);
-        void set_size_px(ImVec2 size_px);
+    class frame_canvas : virtual public abstract_canvas
+    { 
+        RECOMPUTABLE_COMPONENT(vec2, size, vec2())
+        RECOMPUTABLE_COMPONENT(vec2, size_px, vec2())
         
-        ImRect& compute_rect() override;
-
-    protected:
-        bool __recomputing_padding = true;
+    public:
+        vec2 compute_size();
+        const rect_t& compute_rect() override;
     };
 
-    struct window_canvas : canvas
+    struct window_canvas : public frame_canvas
     {
+        RECOMPUTABLE_COMPONENT(rect_t, padding, rect_t())
     public:
-        ImRect padding;
-        ImRect padding_px;
-
-        void set_padding(const ImRect& padding);
-        void set_padding_px(const ImRect& padding_px);
-
-
-
-        ImRect& compute_padding();  
+        const rect_t& compute_padding();
     protected:
-        ImRect __ret_padding;
+        rect_t __cached_padding = rect_t();
     };
 
-    struct text_canvas : virtual abstract_canvas
+    class text_canvas : virtual public abstract_canvas
     {
+        RECOMPUTABLE_COMPONENT(float, size, 0.0f)
+        RECOMPUTABLE_COMPONENT(float, size_px, 0.0f)
     public:
-        iwa::scaled_float size;
-
-        void set_size(float size);
-        void set_size_px(float size_px);
-
-        virtual ImVec2& calculate_text_size() = 0;
-        ImRect& compute_rect() override;
-    protected:
-        ImVec2 __text_size;
+        const rect_t& compute_rect() override;
     };
 }

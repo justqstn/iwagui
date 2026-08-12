@@ -16,7 +16,7 @@
 #include <time.h>
 #include "logger.hpp"
 #include "ui.hpp"
-#include <windows.hpp>
+
 #include <uxtheme.h>
 #include <dwmapi.h>
 
@@ -203,8 +203,7 @@ int main(int, char**)
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
-    
-    iwa::savelogs();
+
     
 
     CleanupDeviceD3D();

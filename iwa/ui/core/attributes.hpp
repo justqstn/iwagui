@@ -1,117 +1,180 @@
 #pragma once
 
-#include "event.hpp"
-#include "widget.hpp"
+#include <concepts>
+
+#include "macroses.hpp"
+#include "canvas.hpp"
 
 namespace iwa
 {
-    struct focusable : virtual abstract_canvas
-    {
-    public:
-        virtual ~focusable();
-        virtual bool focused();
-        iwa::event<>* enter = nullptr;   // Called when mouse is in widget's rect bounds
-        iwa::event<>* leave = nullptr;    // Called when mouse is not in widget's rect bounds
-        void on_leave(iwa::event<>::callback_t fn);
-        void on_enter(iwa::event<>::callback_t fn);
-        bool focusable = true;
-    protected:
-        bool __entered = false;
-
-        virtual void handle_focus();
-        virtual void clear_focus();
-    };
-    
-    struct clickable : virtual abstract_canvas
-    {
-    public:
-        friend class depth_mapper;
-        
-        virtual ~clickable();
-        iwa::event<>* up = nullptr;
-        iwa::event<>* down = nullptr;
-        void on_released(iwa::event<>::callback_t fn);
-        void on_pressed(iwa::event<>::callback_t fn);
-        bool clickable = true;
-
-        virtual bool pressed();
-    protected:
-        bool __down_called = false;
-
-        virtual void handle_click(unsigned int parent_zindex);
-    };
-
-    struct draggable : virtual clickable
-    {
-    public:
-        virtual ~draggable();
-        abstract_canvas* drag_canvas = this;
-        iwa::event<>* start_drag = nullptr;
-        iwa::event<>* end_drag = nullptr;
-        void on_started_drag(iwa::event<>::callback_t fn);
-        void on_ended_drag(iwa::event<>::callback_t fn);
-        bool draggable = false;
-
-        bool pressed() override;
-    protected:
-        ImVec2 __click_pos = {0,0};
-        bool __click_captured = false;      
-        bool __start_called = false;
-
-        virtual void handle_dragging();
-    };
-
-    struct rect_draggable : draggable
-    {
-    public:
-        ImRect drag_bounds;
-    protected:
-        void handle_dragging() override;
-    };
-
-    template <class params_t, class instance_t>
+    template <class T>
     struct stylable
     {
     public:
-        using style_fn = void (*)(params_t*);
-        using style_post_fn = void(*)(instance_t*);
-        
-        void style(style_fn fn)
-        {
-            fn((params_t*)this);
-        }
+        using style_fn = void (*)(T *);
 
-        void style(std::initializer_list<style_fn> list)
+        T *style(style_fn fn)
         {
-            for (auto fn : list)
-            {
-                fn((params_t&)*this);
-            }
+            fn(reinterpret_cast<T *>(this));
+            return reinterpret_cast<T *>(this);
         }
-
-        void style_post(style_post_fn fn)
-        {
-            this->__styles.emplace_back(fn);
-        }
-
-        void style_post(std::initializer_list<style_post_fn> list)
-        {
-            for (auto fn : list)
-            {
-                this->__styles.emplace_back(fn);
-            }
-        }
-
-        void apply_styles(void *widget)
-        {
-            for (auto fn : this->__styles)
-            {
-                fn((instance_t*)widget);
-            }
-            LOGV("Applied %i styles", this->__styles.size());
-            this->__styles.clear();
-        }
-    protected:
-        std::vector<style_post_fn> __styles;
     };
+
+    template<class instance_t>
+    struct abstract_builder : stylable<abstract_builder<instance_t>>
+    {
+    public:   
+        abstract_builder() : instance(new instance_t) { this->instance->__builder_ptr = this; }
+        instance_t* build() { this->validate(); instance->build(); return instance; }
+        instance_t *instance = nullptr;
+        virtual void validate() = 0;
+    };
+
+    template<class instance_t>
+    struct buildable
+    {
+        template<typename T>
+        friend class abstract_builder;
+    public:
+        virtual ~buildable()
+        {
+            // delete reinterpret_cast<abstract_builder<instance_t>*>(__builder_ptr);
+        }
+
+
+        virtual bool builded()
+        {
+            return __builded;
+        }
+
+        virtual void build()    
+        {
+            if (__builded)
+                return; 
+            if (__builder_ptr == nullptr)
+                LOG("MEM LEAK", logger::COLOR_LIGHT_MAGENTA, "Memory leak: __builder_ptr is not initialized")
+
+            __builded = true;
+        }
+
+    protected:
+        bool __builded = false;
+        abstract_builder<instance_t>* __builder_ptr = nullptr;
+    };
+
+    struct renderable
+    {
+        virtual void push(uint parent_zindex) = 0;
+        virtual void render(float dt) = 0;
+    };
+
+    struct initializable
+    {
+    protected:
+        bool __initialized = false; 
+    };
+
+    struct interactible : virtual abstract_canvas
+    {
+        virtual ~interactible();
+        virtual void handle_interact() = 0; 
+    };
+
+    struct hoverable : virtual interactible
+    {
+        SIGNAL_COMPONENT(EMPTY, enter, nullptr)
+        SIGNAL_COMPONENT(EMPTY, leave, nullptr)
+        TOGGEABLE_COMPONENT(hovering, true)
+
+        virtual ~hoverable();
+        virtual bool hovered();
+        void handle_interact() override;
+    protected:
+        bool __enter_callback = false;
+    };
+
+    struct clickable : virtual interactible
+    {
+        friend class input_controller;
+        SIGNAL_COMPONENT(EMPTY, click, nullptr)
+        SIGNAL_COMPONENT(EMPTY, release, nullptr)
+        TOGGEABLE_COMPONENT(clicking, true)
+
+
+        virtual ~clickable();   
+        virtual bool pressed();
+        void handle_interact() override;
+    protected:
+        bool __click_state = false;
+        bool __click_callback = false;  
+    };
+
+    struct draggable : hoverable, clickable
+    {
+        COMPONENT_PTR(abstract_canvas, drag_canvas, this)
+        SIGNAL_COMPONENT(EMPTY, start_dragging, nullptr)
+        SIGNAL_COMPONENT(EMPTY, end_dragging, nullptr)
+        TOGGEABLE_COMPONENT(dragging, true)
+
+        virtual ~draggable();   
+        bool pressed() override;
+        void handle_interact() override;
+    protected:
+        vec2 __click_pos = vec2();
+        bool __click_captured = false;
+        bool __drag_callback = false;   
+        bool __drag_started = false;
+    };
+
+    enum class side_t : char
+    {
+        none = 0,
+        left = 2,
+        right = 4,
+        upper = 8,
+        bottom = 16
+    };
+
+    inline side_t operator|(side_t a, side_t b)
+    {
+        return static_cast<side_t>(static_cast<char>(a) | static_cast<char>(b));
+    }
+
+    inline side_t operator&(side_t a, side_t b)
+    {
+        return static_cast<side_t>(static_cast<char>(a) & static_cast<char>(b));
+    }
+
+    inline side_t &operator|=(side_t &a, side_t b)
+    {
+        return a = a | b;
+    }
+
+    inline bool operator!(side_t side)
+    {
+        return side == side_t::none;
+    }
+
+    struct bounded_draggable : draggable
+    {
+        COMPONENT_PTR(rect_t, drag_bounds, new rect_t())
+        SIGNAL_COMPONENT(side_t, collide_with_side, nullptr)
+        virtual ~bounded_draggable();   
+        void handle_interact() override;
+    };
+
+    struct frame_shadow
+    {
+            // #undef STRUCT
+            // #define STRUCT frame_shadow
+
+            // PARAM(ImVec2, offset, ImVec2())
+            // PARAM(uint, color, ImColor(0,0,0,192))
+            // PARAM(float, distance, 2.5f)
+            // PARAM(float, thickness, 33.0f)
+
+            // #undef STRUCT    
+    };
+
+
 }

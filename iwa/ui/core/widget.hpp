@@ -1,207 +1,292 @@
 #pragma once
 
-#include "imgui.h"
-#include "utils.hpp"
-#include "event.hpp"
-#include "logger.hpp"
-#include "canvas.hpp"
-#include "singleton.hpp"
-#include "config.hpp"
+#include "imgui_internal.h"
 
-#include <optional>
-#include <concepts>
-#include <set>
-#include <algorithm>
-#include <unordered_map>
-#include <format>
+#include <string>
+#include <functional>
+#include <unordered_set>
+
+#include "typedefs.hpp"
+#include "attributes.hpp"
+#include "macroses.hpp"
+#include "canvas.hpp"
+#include "utils.hpp"
+#include "widget_controller.hpp"
+#include "render_controller.hpp"
+#include "input_controller.hpp"
+#include "context.hpp"
 
 namespace iwa
 {
-    
-    /** Abstract widget parameters
-     * - Inherits abstract canvas class, so in your own implementations
-     *  you have to inherit any derived canvas.
-     */
-    struct abstract_widget_params;
-
-
-    /** Abstract class for widget
-     *  @tparam params_t Parameters of widget that must inherit abstract_widget_params
-     */
-    template <class params_t=abstract_widget_params>
-    class abstract_widget;
-
-    /** Empty widget
-     * 
-    */
-    using base_widget = abstract_widget<>;
-
-
-    using widgets_id_set = std::set<std::string>;
-    using widgets_map = std::unordered_map<std::string, base_widget*>;
-    using widgets_id_map = std::unordered_map<std::string, widgets_id_set>;
-
-
-
-    struct abstract_widget_params : virtual abstract_canvas
+    class context;
+    template <class widget_t>
+    class abstract_widget : public virtual abstract_canvas, renderable, buildable<widget_t>
     {
+        COMPONENT(uint, color, color_t(255,255,255))
+        SIGNAL_COMPONENT(float, pre_render, nullptr)
+        SIGNAL_COMPONENT(float, post_render, nullptr)
+        COMPONENT(bool, enabled, true)
+        COMPONENT_PTR(iwa::context, ctx, nullptr)
     public:
-        base_widget* widget = nullptr;
-        
-        ImU32 color = 0;
-        iwa::event<float>* pre = nullptr;  // Called before rendering. @param float Delta time.
-        iwa::event<float>* post = nullptr; // Called after rendering. @param float Delta time.
-        widgets_id_set* parents = nullptr;   
-        widgets_id_set* descendants = nullptr;
-        bool enabled = true;
+        friend class widget_controller;
+        friend class render_controller;
 
-        inline void enable() { this->enabled = true; }
-        inline void disable() { this->enabled = false; }
-        inline void toggle() { this->enabled = !this->enabled; }
+        template<typename T, typename U>
+        friend struct abstract_widget_builder;
 
-        void add_descendant(const std::string &id);
-        void add_parent(const std::string &id);
-        void on_pre_draw(iwa::event<float>::callback_t fn);
-        void on_post_draw(iwa::event<float>::callback_t fn);
-        void destroy_widget();
-    };
+        template<typename T>
+        friend class abstract_builder;
 
-    class widget_manager : public singleton<widget_manager>
-    {
-    public:
-        friend class abstract_widget_params;
-
-        widget_manager();   
-        void add(const std::string& id, base_widget* widget);
-        void remove(base_widget* widget);
-        void remove(const std::string& id);
-        
-        size_t count();
-        base_widget* get(const std::string& id);
-        widgets_id_map parent_queue;
-    private:
-        widgets_map __widgets;
-    };
-    
-    template <class params_t>
-    class abstract_widget
-    {
-        static_assert(std::derived_from<params_t, abstract_widget_params>, "Template argument must be a derived from iwa::abstract_widget_params");
-    public:
-        friend class depth_mapper;
-        friend class widget_manager;
-
-        abstract_widget(params_t* data) : __data(data)
-        {
-            __data->widget = reinterpret_cast<base_widget*>(this);
-            this->data()->apply_styles(this);
-
-            if (__data->id == "") __data->id = iwa::random_id();
-
-            widget_manager::get_instance()->add(__data->id, reinterpret_cast<base_widget*>(this));    
-
-            auto& queue = widget_manager::get_instance()->parent_queue;
-
-            if (queue.contains(__data->id))
-            {
-                if (!__data->descendants) __data->descendants = new widgets_id_set();
-                for (auto& it : queue[__data->id])
-                    __data->descendants->emplace(it);
-                queue.erase(__data->id);
-            }
-            
-            if (__data->parents)
-            {
-                for (auto &it : *__data->parents)
-                {
-                    auto widget = widget_manager::get_instance()->get(it);
-                    if (widget) widget->data()->add_descendant(__data->id);
-                    else 
-                    {
-                        if (!queue.contains(it)) queue[it] = {};
-                        queue[it].emplace(__data->id);
-                    }
-                }
-            }
-
-
-            LOGD("Added new widget with id %s.", __data->id.data());
-        }
-
-        ~abstract_widget() 
-        { 
-            LOGD("Removed widget with id %s.", __data->id.data());
-
-            delete __data->parents;
-            delete __data->descendants;
-            delete __data->pre;
-            delete __data->post;
-            delete __data; 
-        }
+        static const std::string DEFAULT_TAG(); // will be used later
 
         void destroy()
         {
-            __destroyed = true;
-            __data->enabled = false;
+            __active = false;
 
-            if (__data->parents)
+            // __ctx->widgets.erase(this);
+
+            if (__children)
             {
-                for (auto &parent_id : *__data->parents)
+                for (const auto &id : *__children)
                 {
-                    auto widget = widget_manager::get_instance()->get(parent_id);
-
-                    widget->data()->descendants->erase(__data->id);
-                }
-                __data->parents->clear();
-            }
-
-            if (__data->descendants)
-            {
-                for (auto &descendant_id : *__data->descendants)
-                {
-                    auto widget = widget_manager::get_instance()->get(descendant_id);
+                    auto widget = widget_controller::get_instance()->get(id);
                     widget->destroy();
                 }
-                 __data->descendants->clear();
             }
 
-            widget_manager::get_instance()->remove(__data->id);
-            delete this;
+            widget_controller::get_instance()->remove(this);
         }
 
-        bool alive()
+        virtual bool active()
         {
-            return !__destroyed;
+            return __active && __enabled; 
         }
 
-        inline params_t* data() { return static_cast<params_t*>(this->__data); }
+        void push(uint parent_zindex) override
+        {   
+            if (!active()) return;
 
-        virtual void render(unsigned int parent_zindex) = 0;
-        virtual void draw(float dt) = 0;
-    protected:
-        virtual void push_to_depth_map(unsigned int parent_zindex) = 0;
-        
-        virtual void render_descendants(unsigned int parent_zindex)
-        {
-            if (!__data->enabled || !__data->descendants) return;
+            auto zindex = this->__zindex + this->__ctx->get_zindex() + parent_zindex;
+            render_controller::get_instance()->push(reinterpret_cast<widget *>(this));
 
-            for (auto& descendant_id : *__data->descendants)
+            if (__children)
             {
-                auto widget = widget_manager::get_instance()->get(descendant_id);
-                widget->data()->set_bounds(__data->compute_rect());
-                if (widget->data()->enabled) widget->render(__data->zindex + parent_zindex);
+                for (auto &widget_id : *__children)
+                {
+                    auto widget = widget_controller::get_instance()->get(widget_id);
+                    widget->set_bounds(compute_rect());
+                    widget->push(zindex);
+                }
+            }
+
+            if (__children_tags)
+            {
+                for (auto &widget_tag : *__children_tags)
+                {
+                    auto& tagged_widgets = widget_controller::get_instance()->get_tagged(widget_tag);
+                    
+                    for (auto& widget_id : tagged_widgets)
+                    {
+                        auto widget = widget_controller::get_instance()->get(widget_id);
+
+                        widget->set_bounds(compute_rect());                        
+                        widget->push(zindex);
+                    }
+                }
             }
         }
 
-        virtual void push(unsigned int parent_zindex)
+        abstract_widget() {}
+        ~abstract_widget()
         {
-            if (!__data->enabled) return;
-
-            push_to_depth_map(parent_zindex);
-            render_descendants(parent_zindex);
+            delete __children;
+            delete __children_tags;
+            delete __tags;
         }
+
+        void build() override
+        {
+            this->buildable<widget_t>::build();
+
+            if (this->__id == "") 
+                this->__id = random_id();
+
+            widget_controller::get_instance()->add(reinterpret_cast<widget*>(this));
+        } 
+
+        widget_t* add_child(const std::string& id)
+        {
+            if (!__children) 
+                __children = new std::unordered_set<std::string>;
+            __children->emplace(id);
+
+            
+            return reinterpret_cast<widget_t*>(this);
+        }
+
+        widget_t* add_children(std::initializer_list<const std::string&>& ids)
+        {
+            if (!__children) 
+                __children = new std::unordered_set<std::string>;
+            __children->emplace(ids);
+            
+            return reinterpret_cast<widget_t*>(this);
+        }
+
+        widget_t* add_child_tag(const std::string& tag)
+        {
+            if (!__children_tags) 
+                __children_tags = new std::unordered_set<std::string>;
+            __children_tags->emplace(tag);
+
+            
+            return reinterpret_cast<widget_t*>(this);
+        }
+
+        widget_t* add_children_tags(std::initializer_list<const std::string&>& tags)
+        {
+            if (!__children_tags) 
+                __children_tags = new std::unordered_set<std::string>;
+            __children_tags->emplace(tags);
+
+            
+            return reinterpret_cast<widget_t*>(this);
+        }
+
+        widget_t* tag(const std::string& tag)
+        {
+            if (!__tags) 
+                __tags = new std::unordered_set<std::string>;
+            __tags->emplace(tag);
+            
+            return reinterpret_cast<widget_t*>(this);
+        }
+
+        widget_t* tag(std::initializer_list<const std::string&>& tags)
+        {
+            if (!__tags) 
+                __tags = new std::unordered_set<std::string>;
+            __tags->emplace(tags);
+            
+            return reinterpret_cast<widget_t*>(this);
+        }
+
+        const std::unordered_set<std::string>* get_tags()
+        {
+            return __tags;
+        }
+
+    protected:  
+        bool __active = true;
+        std::unordered_set<std::string>* __children = nullptr;
+        std::unordered_set<std::string>* __children_tags = nullptr;
+        std::unordered_set<std::string>* __tags = nullptr;
     private:
-        abstract_widget_params *__data = nullptr;
-        bool __destroyed = false;
+        bool __binded = false;
+    };
+  
+    template<class widget_t>
+    class abstract_interactible_widget : public abstract_widget<widget_t>, virtual interactible
+    {
+    public:
+        void push(uint parent_zindex) override
+        {
+            if (!this->active()) return;
+            
+            this->handle_interact();
+            this->abstract_widget<widget_t>::push(parent_zindex);
+        }
+    };
+
+    
+    template<class builder_t, class widget_t>
+    struct abstract_widget_builder : abstract_builder<widget_t>
+    {
+        #undef BUILDER_TYPE
+        #define BUILDER_TYPE builder_t
+
+        VALUE(std::string, id) 
+        VALUE(color_t, color)
+        VALUE(uint, zindex)
+        RECOMPUTABLE_VALUE(vec2, anchor)
+        RECOMPUTABLE_VALUE(rect_t, bounds)
+        RECOMPUTABLE_VALUE(vec2, pos)
+        RECOMPUTABLE_VALUE(vec2, pos_px)
+        SIGNAL_VALUE(float, pre_render)
+        SIGNAL_VALUE(float, post_render)
+
+        builder_t* ctx(const std::string& id)
+        {
+            this->instance->ctx = context::get(id);
+            return static_cast<builder_t *>(this);
+        }
+
+        builder_t* bind()
+        {
+            this->__binded = true;
+            return static_cast<builder_t *>(this);
+        }
+
+        builder_t* unbind()
+        {
+            this->__binded = false;
+            return static_cast<builder_t *>(this);
+        }
+
+        builder_t* child(const std::string& id)
+        {
+            this->instance->add_child(id);
+            return static_cast<builder_t *>(this);
+        }
+
+        builder_t* children(std::initializer_list<const std::string&>& ids)
+        {
+            this->instance->add_children(ids);
+            return static_cast<builder_t *>(this);
+        }
+
+        builder_t* child_tag(const std::string& tag)
+        {
+            this->instance->add_child_tag(tag);
+            return static_cast<builder_t *>(this);
+        }
+
+        builder_t* children_tags(std::initializer_list<const std::string&>& tags)
+        {
+            this->instance->add_children_tags(tags);
+            return static_cast<builder_t *>(this);
+        }
+
+        builder_t* tag(const std::string& tag)
+        {
+            this->instance->tag(tag);
+            return static_cast<builder_t *>(this);
+        }
+
+        builder_t* tag(std::initializer_list<const std::string&>& tags)
+        {
+            this->instance->tag(tags);
+            return static_cast<builder_t *>(this);
+        }
+
+        void validate() override
+        {
+            auto object = reinterpret_cast<abstract_widget<void*>*>(this->instance);
+            if (object->__ctx == nullptr)
+            {
+                auto global_ctx = iwa::context::get_global();
+                if (!global_ctx) assert(false && "Context is null");
+                else 
+                {
+                    object->__ctx = global_ctx;  
+                    if (__binded) global_ctx->widgets.emplace(reinterpret_cast<widget*>(this->instance));
+                }
+            }
+            else if (__binded) object->__ctx->widgets.emplace(reinterpret_cast<widget*>(this->instance));
+        }   
+
+        #undef BUILDER_TYPE
+    protected:
+        bool __binded;
     };
 }

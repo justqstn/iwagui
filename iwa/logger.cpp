@@ -2,51 +2,59 @@
 #include <cstdarg>
 #include <cstdio>
 #include <time.h>
-#include <string>
+#include <string.h>
+#include <stdlib.h>
 
-namespace {
-    FILE* logs;
+#if defined(_WIN32) || defined(WIN32)
+    #include <windows.h>
+#endif
+
+
+using namespace iwa;
+
+
+
+logger::logger()
+{
+    __ignored_channels = {};
 }
 
-void iwa::log(const char* type, char code, const char* format, ...)
+void logger::ignore(const std::string& channel)
 {
-    if (::logs == NULL)
-    {
-        freopen("CONOUT$", "w", stdout); 
-        // ::logs = fopen((std::to_string((unsigned long)time(NULL)) + ".iwalog").c_str(), "w");
-        ::logs = fopen("latest.iwalog", "w");
-    }
+    __ignored_channels.emplace(channel);
+}
 
-    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
-    if (hConsole == NULL) return;
+void logger::listen(const std::string& channel)
+{
+    __ignored_channels.erase(channel);
+}
 
-    SetConsoleTextAttribute(hConsole, code);
+
+void logger::log(const std::string& channel, char color, const char* format, ...)
+{
+    if (__ignored_channels.contains(channel)) return;
+
+    #if defined(_WIN32) || defined(WIN32)
+        HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
+        if (console == NULL) return;
+        SetConsoleTextAttribute(console, color);
+    #endif
 
     time_t now = time(NULL);
     struct tm *t = localtime(&now);
     char buffer[100];
-
     strftime(buffer, sizeof(buffer), "%H:%M:%S", t);
-
 
     va_list args;
     va_start(args, format);
 
-    printf("(%s) [%s] ", buffer, type);
+    printf("(%s) [%s] ", buffer, channel.data());
     vprintf(format, args);
     printf("\n");
 
-    fprintf(::logs, "(%s) [%s] ", buffer, type);
-    vfprintf(::logs, format, args);
-    fprintf(::logs, "\n");
-
-
     va_end(args);
-
-    SetConsoleTextAttribute(hConsole, FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_GREEN);
-}
-
-void iwa::savelogs()
-{
-    fclose(::logs);
+    
+    #if defined(_WIN32) || defined(WIN32)
+        SetConsoleTextAttribute(console, FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_GREEN);
+    #endif
 }

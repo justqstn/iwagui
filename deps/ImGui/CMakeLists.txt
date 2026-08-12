@@ -3,7 +3,6 @@ cmake_minimum_required(VERSION 3.31)
 project(ImGui)
 
 set(SOURCES 
-    imgui_demo.cpp
     imgui_impl_win32.cpp
     imgui_impl_dx11.cpp
     imgui.cpp
@@ -13,4 +12,10 @@ set(SOURCES
 )
 
 add_library(ImGui_lib STATIC ${SOURCES})
-target_compile_options(ImGui_lib PRIVATE -fpermissive -Oz)
+
+if(${CMAKE_BUILD_TYPE} STREQUAL release)
+    target_compile_options(ImGui_lib PRIVATE -fpermissive -Oz)
+    target_link_options(ImGui_lib PRIVATE -s)
+else()
+    target_compile_options(ImGui_lib PRIVATE)
+endif()

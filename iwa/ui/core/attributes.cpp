@@ -1,166 +1,86 @@
 #include "attributes.hpp"
-#include "depth_mapper.hpp"
-
-/**
- * i have to implement methods for safely setting positions/sizes
- * also fix draggables
- * 
- */
+#include "input_controller.hpp"
 
 using namespace iwa;
 
-void focusable::clear_focus()
-{
-    this->__entered = false;
-}
-
-bool focusable::focused()
+bool hoverable::hovered()
 {
     return compute_rect().Contains(ImGui::GetMousePos());
 }
 
-void focusable::handle_focus()
+interactible::~interactible() {}
+
+hoverable::~hoverable()
 {
-    if (this->focused())
+    LOGD("hoverable::~hoverable")
+    delete __enter_signal;
+    delete __leave_signal;
+}
+
+void hoverable::handle_interact()
+{
+    if (!__hovering) return;
+    if (hovered())
     {
-        if (!this->__entered)
+        if (!__enter_callback)
         {
-            this->__entered = true;
-            if (this->enter) this->enter->call();
+            __enter_callback = true;
+            CALL_SIGNAL(__enter_signal);
         }
     }
-    else if (this->__entered) 
+    else if (__enter_callback)
     {
-        this->__entered = false;
-        if (this->leave) this->leave->call();
+        __enter_callback = false;
+        CALL_SIGNAL(__leave_signal);
     }
-}
-
-void focusable::on_enter(event<>::callback_t fn)
-{
-    if (!this->enter) this->enter = new event<>();
-    this->enter->add(fn);
-}
-
-void focusable::on_leave(event<>::callback_t fn)
-{
-    if (!this->leave) this->leave = new event<>();
-    this->leave->add(fn);
-}
-
-void clickable::on_pressed(event<>::callback_t fn)
-{
-    if (!this->down) this->down = new event<>();
-    this->down->add(fn);
-}
-
-void clickable::on_released(event<>::callback_t fn)
-{
-    if (!this->up) this->up = new event<>();
-    this->up->add(fn);
-}
-
-void draggable::on_ended_drag(event<>::callback_t fn)
-{
-    if (!this->end_drag) this->start_drag = new event<>();
-    this->end_drag->add(fn);
-}
-
-void draggable::on_started_drag(event<>::callback_t fn)
-{
-    if (!this->start_drag) this->start_drag = new event<>();
-    this->start_drag->add(fn);
-}
-
-focusable::~focusable()
-{
-    delete this->enter;
-    delete this->leave;
-    LOGD("%s", __FUNCTION__);
 }
 
 clickable::~clickable()
 {
-    delete this->down;
-    delete this->up;
-    LOGD("%s", __FUNCTION__);
-}
-
-draggable::~draggable()
-{
-    delete this->start_drag;
-    delete this->end_drag;
-    LOGD("%s", __FUNCTION__);
-}
-
-
-
-void clickable::handle_click(unsigned int parent_zindex)
-{
-    auto mapper = depth_mapper::get_instance();
-    auto is_pressed = this->pressed();
-
-    // Sorting clickables by their zindexesw
-    if (is_pressed)
-    {
-        // If current clickable is pressed, check if either is mapper's local clickable is null 
-        // or if is current clickable zindex is equal or greater than mapper's clickable's
-        // and if is clickable hasn't yet called down event, overwrite mapper's clickable with current.
-        auto cur_zindex = parent_zindex + this->zindex;
-        if (mapper->__clickable == nullptr || (cur_zindex >= mapper->__clickable->zindex && !mapper->__clickable->__down_called)) 
-        {
-            mapper->__clickable = this;
-            mapper->__clickable_zindex = cur_zindex; 
-        }
-    }
-    else
-    {
-        // Otherwise if the clickable is not pressed but mapper's clickable is the clickable,
-        // clear mapper's clickable 
-        if (this == mapper->__clickable)
-        {
-            mapper->__clickable->__down_called = false;
-            if (mapper->__clickable->up) mapper->__clickable->up->call();
-            mapper->__clickable = nullptr;
-            mapper->__clickable_zindex = 0;
-        }
-    }
+    LOGD("clickable::~clickable")
+    delete this->__click_signal; 
+    delete this->__release_signal; 
 }
 
 bool clickable::pressed()
 {
-    static auto mapper = depth_mapper::get_instance();
-    bool focused = compute_rect().Contains(ImGui::GetMousePos());
+    bool hovered = compute_rect().Contains(ImGui::GetMousePos());
     bool pressed = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
     bool holding = ImGui::IsMouseDown(ImGuiMouseButton_Left);
-    bool result = (pressed && focused) || (holding && this->__down_called);
+    bool result = (pressed && hovered && (__click_state = true)) || (holding && __click_state);
     return result;
 }
+
+void clickable::handle_interact()
+{
+    input_controller::get_instance()->handle_clickable(this);
+}
+
 
 bool draggable::pressed()
 {
-    static auto mapper = depth_mapper::get_instance();
-    bool focused = drag_canvas->compute_rect().Contains(ImGui::GetMousePos());
+    bool hovered = __drag_canvas->compute_rect().Contains(ImGui::GetMousePos());
     bool pressed = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
     bool holding = ImGui::IsMouseDown(ImGuiMouseButton_Left);
-    bool result = (pressed && focused) || (holding && this->__down_called);
+    bool result = (pressed && hovered && (__click_state = true)) || (holding && __click_state);
     return result;
 }
 
-void draggable::handle_dragging()
-{
-    auto mapper = depth_mapper::get_instance();
 
-    if (this->pressed() && mapper->__clickable == this && this->__down_called)
+void draggable::handle_interact()
+{   
+    if (!__dragging) return;
+    if (pressed() && __click_callback)
     {           
-        if (!__start_called && start_drag)
-        {
-            __start_called = true;
-            start_drag->call();
-        }
         if (__click_captured)
         {
-            pos_px += ImGui::GetMousePos() - __click_pos;
+            auto delta = ImGui::GetMousePos() - __click_pos;
+            if (!__drag_callback && delta.x != 0 && delta.y != 0)
+            {
+                __drag_callback = true;
+                CALL_SIGNAL(__start_dragging_signal)
+            } 
+            __pos_px += delta;
             __recomputing = true;
         }
         __click_pos = ImGui::GetMousePos();
@@ -168,55 +88,82 @@ void draggable::handle_dragging()
     }
     else
     {
-        if (__click_captured && end_drag) end_drag->call();
+        if (__drag_callback) 
+        {
+            __drag_callback = false;
+            CALL_SIGNAL(__end_dragging_signal)
+        }
         __click_pos = {0, 0};
         __click_captured = false;
     }
 }
 
-
-void rect_draggable::handle_dragging()
+draggable::~draggable()
 {
-    auto mapper = depth_mapper::get_instance();
+    LOGD("draggable::~draggable()")
+    delete this->__start_dragging_signal;
+    delete this->__end_dragging_signal;
+}
 
-    if (this->pressed() && mapper->__clickable == this && this->__down_called)
+void bounded_draggable::handle_interact()
+{   
+    if (!__dragging) return;
+    if (pressed() && __click_callback)
     {           
-        if (!__start_called && start_drag)
-        {
-            __start_called = true;
-            start_drag->call();
-        }
+
         if (__click_captured)
         {
             auto delta = ImGui::GetMousePos() - __click_pos;
 
-            if (drag_bounds.Min == ImVec2(0, 0) && drag_bounds.Max == ImVec2(0, 0))
+            if (!__drag_callback && delta.x != 0 && delta.y != 0)
             {
-                pos_px += delta;
+                __drag_callback = true;
+                CALL_SIGNAL(__start_dragging_signal)
+            }
+
+            if (__drag_bounds->Min == ImVec2(0, 0) && __drag_bounds->Max == ImVec2(0, 0))
+            {
+                __pos_px += delta;
                 __recomputing = true;
             }
             else
             {
                 auto saved_delta = delta;
 
-                pos_px += delta;
-                __recomputing = true;
+                __pos_px += delta;
+                this->recompute();
                 auto &rect = compute_rect();
 
-                if (rect.Min.x < drag_bounds.Min.x)
-                    delta.x -= (rect.Min.x - drag_bounds.Min.x);
-                else if (rect.Max.x > drag_bounds.Max.x)
-                    delta.x -= (rect.Max.x - drag_bounds.Max.x);
+                side_t hitted_side = side_t::none;
 
-                if (rect.Min.y < drag_bounds.Min.y)
-                    delta.y -= (rect.Min.y - drag_bounds.Min.y);
-                else if (rect.Max.y > drag_bounds.Max.y)
-                    delta.y -= (rect.Max.y - drag_bounds.Max.y);
+                if (rect.Min.x < __drag_bounds->Min.x)
+                {
+                    delta.x -= (rect.Min.x - __drag_bounds->Min.x);
+                    hitted_side |= side_t::left;
+                }
+                else if (rect.Max.x > __drag_bounds->Max.x)
+                {
+                    delta.x -= (rect.Max.x - __drag_bounds->Max.x);
+                    hitted_side |= side_t::right;
+                }
+                if (rect.Min.y < __drag_bounds->Min.y)
+                {
+                    delta.y -= (rect.Min.y - __drag_bounds->Min.y);
+                    hitted_side |= side_t::upper;
+                }
+                else if (rect.Max.y > __drag_bounds->Max.y)
+                {
+                    delta.y -= (rect.Max.y - __drag_bounds->Max.y);
+                    hitted_side |= side_t::bottom;
+                }
+
+                if (hitted_side != side_t::none)
+                    CALL_SIGNAL(__collide_with_side_signal, hitted_side);
 
                 if (delta != saved_delta)
                 {
-                    pos_px -= saved_delta;
-                    pos_px += delta;
+                    __pos_px -= saved_delta;
+                    __pos_px += delta;
                     __recomputing = true;
                 }
             }
@@ -226,8 +173,19 @@ void rect_draggable::handle_dragging()
     }
     else
     {
-        if (__click_captured && end_drag) end_drag->call();
+        if (__drag_callback) 
+        {
+            __drag_callback = false;
+            CALL_SIGNAL(__end_dragging_signal)
+        }
         __click_pos = {0, 0};
         __click_captured = false;
     }
+}
+
+
+bounded_draggable::~bounded_draggable()
+{
+    LOGD("bounded_draggable::~bounded_draggable()")
+    delete this->__collide_with_side_signal;
 }

@@ -1,10 +1,13 @@
 #include "easings.hpp"
+#define _USE_MATH_DEFINES
+#include <cmath>
+#include <math.h>
 
 using namespace iwa::easings;
 
 float iwa::easings::linear(float x) { return x; }
 
-float in::sine(float x)         { return 1 - cosf((x * M_PI) / 2); }
+float in::sine(float x)         { return 1 - cosf((x * M_PI) / 2);  }
 float out::sine(float x)        { return sinf((x * M_PI) / 2); }
 float inout::sine(float x)      { return -(cosf(M_PI * x) - 1) / 2; }
 

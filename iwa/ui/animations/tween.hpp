@@ -1,12 +1,16 @@
 #pragma once
 
-#include "event.hpp"
-#include "utils.hpp"
-#include "attributes.hpp"
 #include <vector>
+#include "signal.hpp"
+#include "utils.hpp"
+#include "easings.hpp"
+#include "macroses.hpp"
+#include "attributes.hpp"
+
 
 namespace iwa
 {
+    using binded_values_t = std::unordered_set<float*>;
     // Must take and return values in range from 0 to 1
     using easing_fn = float (*)(float);
 
@@ -18,7 +22,7 @@ namespace iwa
     };
 
     /** Class for animating values.
-     *  - Use field .value to get actual value
+     *  - Use method value() to get actual value
      *  - Call tween::tickall(dt) before render process
      */
     class tween;
@@ -26,61 +30,98 @@ namespace iwa
      * Parameters of tween class.
      * - Stylable 
      */
-    struct tween_params : stylable<tween_params, tween>
+
+    struct range_t
     {
-        friend tween;
-        struct speed_params
-        {
-            float value;            // Speed value (delta time * value)
-            easing_fn fn = nullptr; // See file iwa/ui/easings.hpp for default easing functions
-        };
-
-    public:
-        tween* instance;
-        float time = 0.0f;                             // Start point of an animation. Capped in range 0-1
-        tween_type tp = tween_type::none;              // Type of tween animation behaviour.
-        speed_params forward_speed = {1.0f, nullptr};  // Tween uses this speed if animation time goes from start to end.
-        speed_params backward_speed = {1.0f, nullptr}; // Tween uses this speed if animation time goes from end to start.
-        iwa::event<iwa::tween *> *end;                 // Calls when time value reach 1.
-        iwa::event<iwa::tween *> *start;               // Calls when time value reach 0.
-        bool enabled = true;                           // If it's not enabled, it won't update even if tween::tick() is called.
-        bool backwards = false;                        // Determines is animation directed back (time goes from 1 to 0) or forth (time goes from 0 to 1)
-        bool ticking = true;                           // if true, will tick when tween::tickall() is called
-
-        inline void enable() { this->enabled = true; }   // Binding for enabling tween.
-        inline void disable() { this->enabled = false; } // Binding for disabling tween.
-        inline void speed(float speed)                   // Binding for setting speed. @note Sets the value for both speeds.
-        {
-            this->backward_speed.value = speed;
-            this->forward_speed.value = speed;
-        }
-        inline void easing(easing_fn fn) // Binding for setting easing function. @note Sets the value for both speeds.
-        {
-            this->backward_speed.fn = fn;
-            this->forward_speed.fn = fn;
-        }
+        float min = 0.0f;
+        float max = 1.0f;
     };
 
-    class tween
+    class tween final
     {
     public:
-        tween_params *data;                            // Tween variables and configurates.
+        COMPONENT(float, time, 0.0f)
+        COMPONENT(float, speed, 0.0f)
+        COMPONENT(float, rev_speed, 0.0f)
+        COMPONENT(tween_type, type, tween_type::none)
+        TOGGEABLE_COMPONENT(enabled, true)
+        TOGGEABLE_COMPONENT(backwards, false)
+        TOGGEABLE_COMPONENT(ticking, true)
+        COMPONENT(range_t, range, range_t({.min = 0.0f, .max = 1.0f}))
+        COMPONENT(easing_fn, speed_fn, easings::linear)
+        COMPONENT(easing_fn, rev_speed_fn, easings::linear)
+        SIGNAL_COMPONENT(float, update, nullptr)
+        SIGNAL_COMPONENT(EMPTY, start, nullptr)
+        SIGNAL_COMPONENT(EMPTY, end, nullptr)
+        
+        struct builder : stylable<builder>
+        {
+        public:
+            
 
-        tween(tween_params *data);
+            builder(tween* instance) : instance(instance) {}
+            tween *build()
+            {
+                instance->build();
+                return instance;
+            }
+            tween *instance = nullptr;
+
+            #undef BUILDER_TYPE
+            #define BUILDER_TYPE builder
+
+            VALUE(float, time)
+            VALUE(tween_type, type)
+            TOGGEABLE_VALUE(enabled)
+            TOGGEABLE_VALUE(backwards)
+            TOGGEABLE_VALUE(ticking)
+            VALUE(float, speed)
+            VALUE(easing_fn, speed_fn)
+            VALUE(float, rev_speed)
+            VALUE(easing_fn, rev_speed_fn)
+            SIGNAL_VALUE(EMPTY, start)
+            SIGNAL_VALUE(EMPTY, end)
+            SIGNAL_VALUE(float, update)
+            VALUE(range_t, range)
+            builder* bind(float& value)
+            {
+                instance->bind(value);
+                return this;
+            }
+
+            builder* bind(std::initializer_list<float*>& values)
+            {
+                instance->bind(values);
+                return this;
+            }
+
+            #undef BUILDER_TYPE 
+
+        };
+        friend builder;
+
+        tween();
         ~tween();
-        void reset();                               
-        void finish();
-        void start();
-        void backward();
-        void enable();
-        void disable();
-        void toggle();
+        void build();
         void tick(float dt);
-        float value;
+        float value();
+        void bind(float& value);
+        void bind(std::initializer_list<float*>& values);
+        void unbind(float& value);
+        void clear_binded();
         static void tickall(float dt);
 
+        builder* construct();
+        bool active();
+
     private:
+        void __add_update_signal();
+        void __check_binded_values();
+        binded_values_t* __binded_values = nullptr;
+        builder* __builder;
         bool __reached_end = false;
         bool __reached_start = false;
+        bool __builded = false; 
+        float __value;
     };
 }

@@ -6,22 +6,22 @@
 namespace iwa
 {
     /**
-    * It's used to simply handle events via callbacks 
-    * @tparam params_t Set of event arguments
+    * It's used to simply handle signals via callbacks 
+    * @tparam params_t Set of signal arguments
     */
 
     
     template<class ...params_t>
-    class event
+    class signal
     {
     public:
-        event() = default;
+        signal() = default;
 
         using callback_t = std::function<void(params_t...)>;
 
         /**
          * Calls all attached callbacks
-         * @param params Event arguments
+         * @param params signal arguments
          */
         void call(params_t... params)
         {
@@ -35,7 +35,7 @@ namespace iwa
          * Attaches callback
          * @param params Callback (lambda, reference to function)
          */
-        iwa::event<params_t...>* add(callback_t function)
+        iwa::signal<params_t...>* add(callback_t function)
         {
             this->__functions.emplace_back(function);
             return this;

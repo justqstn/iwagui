@@ -3,6 +3,7 @@
 #include <cmath>
 #include <vector>
 #include "logger.hpp"
+#include "macroses.hpp"
 
 using namespace iwa;
 
@@ -17,101 +18,154 @@ namespace
 
 
 
-tween::tween(tween_params* data)
+tween::tween()
 {
-    this->data = data;
-    this->data->instance = this;
-    auto params = this->data;
-    params->apply_styles(this);
-    if (params->forward_speed.fn == nullptr) params->forward_speed.fn = (easing_fn)(::__dontchange);
-    if (params->backward_speed.fn == nullptr) params->backward_speed.fn = (easing_fn)(::__dontchange);
 
-    if (params->enabled)
+}
+
+void tween::build()
+{
+    if (__builded) return;
+    delete __builder;
+    __builded = true;
+
+    if (__enabled)
     {
-        if (params->backwards) params->time = 1.0f;
-        else params->time = 0.0f;
+        if (__backwards)
+            __time = 1.0f;
+        else
+            __time = 0.0f;
     }
-    
+
     tweens.emplace_back(this);
 
     LOGD("New tween, total count: %i", tweens.size());
 }
 
-tween::~tween()
+bool tween::active()
 {
-    delete this->data->start;
-    delete this->data->end;
-    delete this->data;
+    return __builded && __enabled;
 }
 
-void tween::reset() { this->data->time = 0.0f; }
+tween::builder* tween::construct()
+{
+    __builder = new tween::builder(this); return new tween::builder(this);
+}
 
-void tween::finish() { this->data->time = 1.0f; }
+tween::~tween()
+{
+    delete __start_signal;
+    delete __end_signal;
+}
 
-void tween::backward() { this->data->backwards = !this->data->backwards; }
+float tween::value()
+{
+    return __value;
+}
 
-void tween::enable() { this->data->enabled = true; }
-void tween::disable() { this->data->enabled = false; }
-void tween::toggle() { this->data->enabled = !this->data->enabled; }
+void tween::__add_update_signal()
+{
+    __update_signal = new signal<float>;
+    __update_signal->add([binded_values = __binded_values](float value){
+        for (auto binded : *binded_values)
+        {
+            *binded = value;
+        }
+    });
+}
 
+void tween::__check_binded_values()
+{
+    if (!__binded_values)
+    {
+        __binded_values = new binded_values_t();
+        __add_update_signal();
+    }
+}
+
+void tween::bind(float &value)
+{
+    __check_binded_values();
+    __binded_values->emplace(&value);
+}
+
+void tween::bind(std::initializer_list<float *>& values)
+{
+    __check_binded_values();
+    // __binded_values->emplace(values);
+}
+
+void tween::unbind(float &value)
+{
+    __check_binded_values();
+    __binded_values->erase(&value);
+}
+
+void tween::clear_binded()
+{
+    __check_binded_values();
+    __binded_values->clear();
+}
 
 void tween::tick(float dt)
 {
-    auto params = this->data;
-    if (!params->enabled) return;
+   
+    if (!__enabled) return;
 
-    if (!params->backwards)
+    if (!__backwards)
     {
-        params->time = std::min(params->time + dt * params->forward_speed.value, 1.0f);
-        this->value = params->forward_speed.fn(params->time);
+        __time = std::min(__time + dt * __speed, 1.0f);
+        __value = ImLerp(__range.min, __range.max, __speed_fn(__time));
     }
     else
     {
-        params->time = std::max(params->time - dt * params->backward_speed.value, 0.0f);
-        this->value = params->backward_speed.fn(params->time);
+        __time = std::max(__time - dt * __rev_speed, 0.0f);
+        __value = ImLerp(__range.min, __range.max, __rev_speed_fn(__time));
     }
 
-    bool reached_end = params->time == 1.0f;
-    bool reached_start = params->time == 0.0f;
+    CALL_SIGNAL(__update_signal, __value)
+
+    bool reached_end = __time == 1.0f;
+    bool reached_start = __time == 0.0f;
 
     if (reached_end || reached_start)
     {
-        if (params->tp & tween_type::repeatable)
+        if (__type & tween_type::repeatable)
         {
-            params->backwards = !params->backwards;
+            __backwards = !__backwards;
         }
-        else if (params->tp & tween_type::restartable)
+        else if (__type & tween_type::restartable)
         {
-            if (params->backwards)
-                params->time = 1.0f;
+            if (__backwards)
+                __time = 1.0f;
             else
-                params->time = 0.0f;
+                __time = 0.0f;
         }
 
-        if (reached_end && !this->__reached_end)
+        if (reached_end && !__reached_end)
         {
-            this->__reached_end = true;
+            __reached_end = true;
             LOGV("Event tween::end");
-            if (params->end) params->end->call(this);
+            CALL_SIGNAL(__end_signal) 
         }
 
-        if (reached_start && !this->__reached_start)
+        if (reached_start && !__reached_start)
         {
-            this->__reached_start = true;
+            __reached_start = true;
             LOGV("Event tween::start");
-            if (params->start) params->start->call(this);
+
+            CALL_SIGNAL(__start_signal) 
         }
     }
     if (!reached_end)
-        this->__reached_end = false;
+        __reached_end = false;
     if (!reached_start)
-        this->__reached_start = false;
+        __reached_start = false;
 }
 
 void tween::tickall(float dt)
 {
     for (auto an : tweens)
-    {
-        if (an->data->ticking) an->tick(dt);
-    }
+        if (an->__ticking && an->active()) 
+            an->tick(dt);
 }   

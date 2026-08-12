@@ -28,5 +28,14 @@ target_link_libraries(main_overlay PUBLIC
     dwmapi
 )
 
-target_compile_options(main PUBLIC -Ofast -flto=auto)
-target_compile_options(main_overlay PUBLIC -Ofast -flto=auto)
+if(${CMAKE_BUILD_TYPE} STREQUAL release)
+    target_compile_options(main PUBLIC -O3 -DNDEBUG -flto=auto)
+    target_compile_options(main_overlay PUBLIC -O3 -DNDEBUG -flto=auto)
+    target_link_options(main_overlay PUBLIC -s)
+    target_link_options(main PUBLIC -s)
+else()
+    target_compile_options(main PUBLIC)
+    target_compile_options(main_overlay PUBLIC)
+endif()
+
+

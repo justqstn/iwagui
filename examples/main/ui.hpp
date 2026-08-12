@@ -1,7 +1,8 @@
 #pragma once
 
 #include "iwagui.hpp"
-#include "singleton.hpp"
+
+
 class ui : public iwa::singleton<ui>
 {
 public:
@@ -10,6 +11,6 @@ public:
     void tick(float dt);
     void setstyle();
     void init();
-    iwa::event<> on_toggle;
-    iwa::event<> on_closed;
+    iwa::signal<> on_toggle;
+    iwa::signal<> on_closed;
 };  

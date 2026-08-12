@@ -1,8 +1,10 @@
 #pragma once
-// Internal utilites
 
 #include "imgui.h"
 #include "imgui_internal.h"
+
+#include "typedefs.hpp"
+
 #include <vector>
 #include <string>
 
@@ -11,33 +13,10 @@
 
 namespace iwa
 {
-    // @todo need to refactoring
-    struct scaled_float
-    {
-    public:
-        scaled_float();
-        scaled_float(float scaled);
-        scaled_float(float scaled, float value_px);
-        float value;
-        float value_px;
-        float scaling_factor;
-        
-        float compute();
-        void set(float value);
-        void set_px(float value_px);
-        void factor(float factor);
-    private:
-        float __computed;
-        bool __recomputing;
-    };
-
     ImVec2 get_screen_resolution();
-    
-    #define SCREEN_X get_screen_resolution().x
-    #define SCREEN_Y get_screen_resolution().y
 
-    ImColor apply_alpha(ImColor src);
-    ImColor apply_alpha(ImColor src, float alpha);
+    color_t apply_alpha(color_t src);
+    color_t apply_alpha(color_t src, float alpha);
 
     std::string random_id();
 }
