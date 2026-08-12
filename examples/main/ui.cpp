@@ -133,10 +133,11 @@ void ui::render(float dt)
     });
 
     static auto child_frame = ({
-        (new frame::builder())
+        (new bounded_draggable_frame::builder())
             ->tag("child")
             ->id("frame2")
             ->size({1,0.03})
+            ->drag_bounds(const_cast<rect_t*>(&frame->compute_rect()))
             ->color(color_t(64,44,55))
             ->build();
     });

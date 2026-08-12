@@ -47,7 +47,8 @@ bool clickable::pressed()
     bool hovered = compute_rect().Contains(ImGui::GetMousePos());
     bool pressed = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
     bool holding = ImGui::IsMouseDown(ImGuiMouseButton_Left);
-    bool result = (pressed && hovered && (__click_state = true)) || (holding && __click_state);
+    bool result = (pressed && hovered) || (holding && __click_state);
+    __click_state = result; 
     return result;
 }
 
@@ -62,7 +63,8 @@ bool draggable::pressed()
     bool hovered = __drag_canvas->compute_rect().Contains(ImGui::GetMousePos());
     bool pressed = ImGui::IsMouseClicked(ImGuiMouseButton_Left);
     bool holding = ImGui::IsMouseDown(ImGuiMouseButton_Left);
-    bool result = (pressed && hovered && (__click_state = true)) || (holding && __click_state);
+    bool result = (pressed && hovered) || (holding && __click_state);
+    __click_state = result; 
     return result;
 }
 

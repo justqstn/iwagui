@@ -36,7 +36,7 @@ const rect_t& frame_canvas::compute_rect()
         this->__recomputing = false;
     }
     
-    if (this->__bounds.GetArea() == 0) LOGE("Bounds are null %s", this->__id.data())
+    if (this->__bounds.GetArea() == 0) LOGE("\"%s\": Bounds are null", this->__id.data())
 
     return this->__cached_rect;
 }

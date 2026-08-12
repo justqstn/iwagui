@@ -75,7 +75,7 @@ namespace iwa
                 {
                     auto widget = widget_controller::get_instance()->get(widget_id);
                     widget->set_bounds(compute_rect());
-                    widget->push(zindex);
+                    widget->push(zindex + 1);
                 }
             }
 
@@ -90,7 +90,7 @@ namespace iwa
                         auto widget = widget_controller::get_instance()->get(widget_id);
 
                         widget->set_bounds(compute_rect());                        
-                        widget->push(zindex);
+                        widget->push(zindex + 1);
                     }
                 }
             }

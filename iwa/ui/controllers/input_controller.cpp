@@ -11,7 +11,7 @@ input_controller::input_controller()
 void input_controller::handle_clickable(clickable* object)
 {
     bool pressed = object->pressed();   
-    if (object == __clickable && !pressed)
+    if (object->__click_callback && !pressed)
     {
         CALL_SIGNAL(__clickable->__release_signal);
         __clickable->__click_callback = false;
