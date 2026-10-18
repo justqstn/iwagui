@@ -16,7 +16,7 @@
 
 // Animations
 #include "tween.hpp"
-#include "easings.hpp"
+#include "Easings.hpp"
 
 // Widgets
 #include "frame.hpp"
