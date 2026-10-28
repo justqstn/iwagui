@@ -1,23 +1,21 @@
 #pragma once
-#include <vector>
 #include <functional>
-
+#include <vector>
 
 namespace Iwa
 {
     /**
-    * It's used to simply handle signals via callbacks 
-    * @tparam params_t Set of Signal arguments
-    */
+     * It's used to simply handle signals via callbacks
+     * @tparam params_t Set of Signal arguments
+     */
 
-    
-    template<class ...params_t>
+    template <typename... params_t>
     class Signal
     {
     public:
         Signal() = default;
 
-        using callback_t = std::function<void(params_t...)>;
+        using callback_t = std::function_ref<void(params_t...)>;
 
         /**
          * Calls all attached callbacks
@@ -47,12 +45,11 @@ namespace Iwa
          */
         void remove(callback_t function)
         {
-            std::erase_if(this->__functions, [function](callback_t function2) {
-                return function == function2;
-            });
+            std::erase_if(this->__functions, [function](callback_t function2) { return function == function2; });
         }
+
     private:
         // @todo: here is bad memory using
         std::vector<callback_t> __functions;
     };
-}
+} // namespace Iwa

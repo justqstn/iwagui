@@ -7818,7 +7818,7 @@ STBIDEF int stbi_is_16_bit_from_callbacks(stbi_io_callbacks const *c, void *user
                          STBI_MALLOC,STBI_REALLOC,STBI_FREE
                          GIF bugfix -- seemingly never worked
                          STBI_NO_*, STBI_ONLY_*
-      1.48  (2014-12-14) fix incorrectly-named assert()
+      1.48  (2014-12-14) fix incorrectly-named IWA_ASSERT()
       1.47  (2014-12-14) 1/2/4-bit PNG support, both direct and paletted (Omar Cornut & stb)
                          optimize PNG (ryg)
                          fix bug in interlaced PNG with user-specified channel count (stb)

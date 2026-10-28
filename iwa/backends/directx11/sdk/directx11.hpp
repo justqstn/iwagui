@@ -1,21 +1,22 @@
 #pragma once
 
-#include "sdk/utils/singleton.hpp"
-#include "sdk/renderer.hpp"
+#include "sdk/abstractions.hpp"
 #include "sdk/math.hpp"
+#include "sdk/renderer.hpp"
+
 
 #include <cstdint>
 #include <d3d11.h>
 #include <filesystem>
 #include <vector>
+#include <windef.h>
 #include <winnt.h>
 
 namespace Iwa
 {
-    namespace SDK
-    {
         struct BackendData_t
         {
+            D3D11_VIEWPORT viewport;
             ID3D11Device* device = nullptr;
             ID3D11DeviceContext* device_ctx = nullptr;
             IDXGISwapChain* swap_chain = nullptr;
@@ -27,6 +28,14 @@ namespace Iwa
             ID3D11VertexShader* vertex_shader = nullptr;
             ID3D11PixelShader* pixel_shader = nullptr;
             ID3D11PixelShader* pixel_shader_textured = nullptr;
+            ID3D11PixelShader* pixel_shader_text = nullptr;
+            ID3D11Buffer* constant_buffer = nullptr;
+            HWND hwnd = nullptr;
+        };
+
+        struct ConstantBuffer_t
+        {
+            float model_view_projection[4][4];
         };
 
         struct Buffer_t
@@ -35,26 +44,37 @@ namespace Iwa
             size_t size = 0;
         };
 
-        class Texture final : public AbstractTexture<Texture, ID3D11ShaderResourceView>
+        // forward declarations for my dear hbs :heart:
+
+        class Renderer;
+        class RenderContext;
+
+        class Texture : public Internal::AbstractTexture<Texture, Renderer, ID3D11ShaderResourceView>
         {
         public:
-            Texture(const std::string& id);
-            bool Load(const std::vector<uint8_t>& bytes) const override;
-            bool Load(const std::filesystem::path& path) const override;
+
+            bool Load(const std::span<const uint8_t> data) override;
+            bool Load(const std::filesystem::path& path) override;
+        protected:
+            Texture(const Renderer* renderer, const std::string& id);
+            ~Texture();
         };
 
-        class Font final : public AbstractFont<Font, ID3D11ShaderResourceView>
+        class BitmapFont : public Internal::AbstractBitmapFont<BitmapFont, Renderer, ID3D11ShaderResourceView>
         {
         public:
-            constexpr static Vec2_t ATLAS_SIZE = {512,512};
-            Font(const std::string& id);
+            BitmapFont* Load(const std::span<const uint8_t> data, const std::span<const CharRange_t> ranges) override;
+            BitmapFont* Load(const std::filesystem::path& path, const std::span<const CharRange_t> ranges) override;
 
-            bool Load(const std::vector<uint8_t>& bytes) const override;
-            bool Load(const std::filesystem::path& path) const override;
-            bool LoadFromSystem(const std::filesystem::path& path) const override;
+            // Only Windows
+            BitmapFont* LoadFromSystem(const std::filesystem::path& path) override;
+        protected:
+            ~BitmapFont();
+            BitmapFont(const Renderer* renderer, const std::string& id, float scale = 48.0f);
         };
 
-        class RenderContext final : public AbstractRenderContext<RenderContext, ID3D11ShaderResourceView>
+        class RenderContext
+            : public Internal::AbstractRenderContext<RenderContext, Renderer, Texture, ID3D11ShaderResourceView, BitmapFont>
         {
         public:
             Buffer_t vertex_buffer;
@@ -63,38 +83,34 @@ namespace Iwa
 
             constexpr static size_t DEFAULT_RECT_COUNT = 512;
             constexpr static size_t DEFAULT_INDEX_BUFFER_SIZE = DEFAULT_RECT_COUNT * 6;
-            constexpr static size_t DEFAULT_VERTEX_BUFFER_SIZE = DEFAULT_RECT_COUNT * sizeof(Vertex_t) * 4;
+            constexpr static size_t DEFAULT_VERTEX_BUFFER_SIZE = DEFAULT_RECT_COUNT * sizeof(Internal::Vertex_t) * 4;
 
-            RenderContext(const std::string& id);
+
 
             bool isInitialized();
-            void DrawRect(const RenderableRect_t& rect) override;
-            void DrawTexturedRect(const RenderableRect_t& rect, ID3D11ShaderResourceView* resource) override;
             void Render() override;
             void Cleanup() override;
-
+        protected:
+            RenderContext(const Renderer* renderer, const std::string& id);
         private:
             bool __initialized = false;
         };
 
-        class Renderer final : public AbstractRenderer<Renderer, BackendData_t, RenderContext>
+        class Renderer : public Internal::AbstractRenderer<Renderer, BackendData_t, RenderContext>
         {
         public:
-            Renderer();
-            ~Renderer() override;
-
-            static constexpr const char* getID() { return "Direct3D 11 Renderer"; }
-
+            static constexpr const char* getRendererID() { return "DX11"; }
             static constexpr const char* LOG_CHANNEL_RENDERER = "RENDERER";
-            static constexpr const char* LOG_CHANNEL_FRAMETIME = "FRAMETIME";
-            static constexpr const char* LOG_CHANNEL_FRAMESTATS = "FRAMESTATS:V";
 
             HRESULT Initialize();
             HRESULT
-            Initialize(ID3D11Device* device, ID3D11DeviceContext* immediate_context, IDXGISwapChain* swap_chain,
-                       ID3D11RenderTargetView* render_target_view);
-            void Cleanup();
+            Initialize(HWND hwnd, ID3D11Device* device, ID3D11DeviceContext* immediate_context,
+                       IDXGISwapChain* swap_chain, ID3D11RenderTargetView* render_target_view);
+            void Cleanup() override;
             void Render() override;
+            void PreRender() override;
+            void ResizeViewport(Vec2_t size) override;
+        protected:
+            Renderer(const std::string& id);
         };
-    } // namespace SDK
 } // namespace Iwa

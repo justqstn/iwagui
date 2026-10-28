@@ -1,3 +1,17 @@
+#include <unordered_map>
+#include <windows.h>
+#include <wingdi.h>
+
+#define STB_RECT_PACK_IMPLEMENTATION
+#include "thirdparty/stb_rect_pack.h"
+
+#define STB_TRUETYPE_IMPLEMENTATION
+#include "thirdparty/stb_image.h"
+
+#define _CRT_SECURE_NO_WARNINGS
+#define STB_IMAGE_IMPLEMENTATION
+#include "thirdparty/stb_image.h"
+
 #include "sdk/directx11.hpp"
 #include "sdk/abstractions.hpp"
 #include "sdk/math.hpp"
@@ -10,13 +24,6 @@
 #include <format>
 #include <fstream>
 #include <iterator>
-
-#define _CRT_SECURE_NO_WARNINGS
-#define STB_IMAGE_IMPLEMENTATION
-#include "thirdparty/stb_image.h"
-
-#define STB_TRUETYPE_IMPLEMENTATION
-#include "thirdparty/stb_truetype.h"
 
 #include <assert.h>
 #include <chrono>
@@ -34,12 +41,13 @@
 #include <winnt.h>
 
 using namespace Iwa;
-using namespace Iwa::SDK;
+using namespace Iwa::Internal;
+
 
 namespace
 {
-    HRESULT CompileShader(const unsigned char* shader_data, size_t shader_size, LPCSTR szEntryPoint,
-                          LPCSTR szShaderModel, ID3DBlob** ppBlobOut)
+    HRESULT CompileShader(const uint8_t* shader_data, size_t shader_size, LPCSTR szEntryPoint, LPCSTR szShaderModel,
+                          ID3DBlob** ppBlobOut)
     {
         HRESULT result = S_OK;
         DWORD dwShaderFlags = D3DCOMPILE_ENABLE_STRICTNESS;
@@ -63,60 +71,63 @@ namespace
     }
 } // namespace
 
-Texture::Texture(const std::string& id) : Iwa::SDK::AbstractTexture<Texture, ID3D11ShaderResourceView>::AbstractTexture(id) {}
+Texture::Texture(const Renderer* renderer, const std::string& id) : AbstractTexture<Texture, Renderer, ID3D11ShaderResourceView>::AbstractTexture(renderer, id) {}
 
-bool Texture::Load(const std::vector<uint8_t>& bytes) const
+Texture::~Texture()
+{
+
+}
+
+bool Texture::Load(const std::span<const uint8_t> data)
 {
     HRESULT result = S_OK;
-    auto& backend_data = Renderer::getInstance()->getBackendData();
+    auto& backend_data = this->renderer->getBackendData();
+
+    // todo: refactor ts
 
     int image_width, image_height = 0;
-    uint8_t* image_data = stbi_load_from_memory(const_cast<const uint8_t*>(bytes.data()), bytes.size(), &image_width, &image_height, nullptr, 4);
+    uint8_t* image_data = stbi_load_from_memory(const_cast<const uint8_t*>(data.data()), data.size(), &image_width, &image_height, nullptr, 4);
 
-    this->__size.x = image_width;
-    this->__size.y = image_height;
+    this->__size = Vec2_t(image_width, image_height);
     if (image_data == nullptr)
     {
-        LOGE("Couldn't load image_data: stbi_load_from_memory returned nullptr.");
-        return false;
+        LogFatal("Couldn't load image_data: stbi_load_from_memory returned nullptr.");
     }
 
-    D3D11_TEXTURE2D_DESC desc = {};
-    ZeroMemory(&desc, sizeof(desc));
-    desc.Width = static_cast<int>(this->__size.x);
-    desc.Height = static_cast<int>(this->__size.y);
-    desc.MipLevels = 1;
-    desc.ArraySize = 1;
-    desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    desc.SampleDesc.Count = 1;
-    desc.Usage = D3D11_USAGE_DEFAULT;
-    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-    desc.CPUAccessFlags = 0;
+    ID3D11Texture2D *texture = nullptr;
+    D3D11_TEXTURE2D_DESC tex_desc = {};
+    tex_desc.Width = static_cast<int>(this->__size.x);
+    tex_desc.Height = static_cast<int>(this->__size.y);
+    tex_desc.MipLevels = 1;
+    tex_desc.ArraySize = 1;
+    tex_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    tex_desc.SampleDesc.Count = 1;
+    tex_desc.Usage = D3D11_USAGE_DEFAULT;
+    tex_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    tex_desc.CPUAccessFlags = 0;
 
-    ID3D11Texture2D *texture_ptr = nullptr;
-    D3D11_SUBRESOURCE_DATA sub_resource = {};
-    ZeroMemory(&sub_resource, sizeof(sub_resource));
-    sub_resource.pSysMem = image_data;
-    sub_resource.SysMemPitch = desc.Width * 4;
-    sub_resource.SysMemSlicePitch = 0;
-    result = backend_data.device->CreateTexture2D(&desc, &sub_resource, &texture_ptr);
+    D3D11_SUBRESOURCE_DATA subres = {};
+    subres.pSysMem = image_data;
+    subres.SysMemPitch = tex_desc.Width * 4;
+    subres.SysMemSlicePitch = 0;
+    result = backend_data.device->CreateTexture2D(&tex_desc, &subres, &texture);
     if (FAILED(result))
     {
-        LOGE("Couldn't create Texture2D, code: 0x%x", result);
+        LogFatal("Couldn't create Texture2D, code: {:#x}", result);
     }
 
     D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc = {};
     srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
     srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-    srv_desc.Texture2D.MipLevels = desc.MipLevels;
+    srv_desc.Texture2D.MipLevels = tex_desc.MipLevels;
     srv_desc.Texture2D.MostDetailedMip = 0;
 
-    result = backend_data.device->CreateShaderResourceView(texture_ptr, &srv_desc, &this->__resource);
+    result = backend_data.device->CreateShaderResourceView(texture, &srv_desc, &this->__resource);
+    texture->Release();
 
-    texture_ptr->Release();
     if (FAILED(result))
     {
-        LOGE("Couldn't create shader resource view, code: 0x%x", result);
+        LogFatal("Couldn't create shader resource view, code: {:#x}", result);
     }
 
     stbi_image_free(image_data);
@@ -124,9 +135,9 @@ bool Texture::Load(const std::vector<uint8_t>& bytes) const
     return SUCCEEDED(result);
 }
 
-bool Texture::Load(const std::filesystem::path& path) const
+bool Texture::Load(const std::filesystem::path& path)
 {
-    assert(not std::filesystem::is_regular_file(path) && std::format("File {} is not existing.", path.string()).data());
+    IWA_ASSERT(not std::filesystem::is_regular_file(path) && std::format("File {} is not existing.", path.string()).data());
 
     std::ifstream file_input(path);
     std::vector<uint8_t> file_data((std::istreambuf_iterator<char>(file_input)), std::istreambuf_iterator<char>());
@@ -134,133 +145,72 @@ bool Texture::Load(const std::filesystem::path& path) const
     return this->Load(file_data);
 }
 
-Font::Font(const std::string& id) : SDK::AbstractFont<Font, ID3D11ShaderResourceView>(id) {}
+BitmapFont::BitmapFont(const Renderer* renderer, const std::string& id, float scale) : AbstractBitmapFont<BitmapFont, Renderer, ID3D11ShaderResourceView>(renderer, id, scale) {}
 
-bool Font::Load(const std::vector<uint8_t>& bytes) const
+BitmapFont* BitmapFont::Load(const std::span<const uint8_t> data, const std::span<const CharRange_t> ranges)
 {
-    auto& backend_data = SDK::Renderer::getInstance()->getBackendData();
-    std::array<stbtt_bakedchar, 96> baked_chars;
-    std::vector<uint8_t> atlas_pixels(Font::ATLAS_SIZE.x * Font::ATLAS_SIZE.y);
+    auto pixels = this->__alloc_and_pack_font_bitmap(data, ranges);
 
-    int code = stbtt_BakeFontBitmap(bytes.data(), 0, 32.0f, atlas_pixels.data(), Font::ATLAS_SIZE.x, Font::ATLAS_SIZE.y, 32, 96, baked_chars.data());
+    HRESULT result = S_OK;
+    auto& backend_data = this->renderer->getBackendData();
 
     ID3D11Texture2D* texture = nullptr;
-    ID3D11ShaderResourceView* srv = nullptr;
-
-    D3D11_TEXTURE2D_DESC desc = {};
-    desc.Width = Font::ATLAS_SIZE.x;
-    desc.Height = Font::ATLAS_SIZE.y;
-    desc.MipLevels = 1;
-    desc.ArraySize = 1;
-    desc.Format = DXGI_FORMAT_R8_UNORM;
-    desc.SampleDesc.Count = 1;
-    desc.Usage = D3D11_USAGE_IMMUTABLE;
-    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-
+    D3D11_TEXTURE2D_DESC tex_desc = {};
+    tex_desc.Width = this->__atlas_size.x;
+    tex_desc.Height = this->__atlas_size.y;
+    tex_desc.MipLevels = 1;
+    tex_desc.ArraySize = 1;
+    tex_desc.Format = DXGI_FORMAT_R8_UNORM;
+    tex_desc.SampleDesc.Count = 1;
+    tex_desc.Usage = D3D11_USAGE_IMMUTABLE;
+    tex_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
 
     D3D11_SUBRESOURCE_DATA subres = {};
-    subres.pSysMem = atlas_pixels.data();
-    subres.SysMemPitch = Font::ATLAS_SIZE.x;
+    subres.pSysMem = pixels->data();
+    subres.SysMemPitch = this->__atlas_size.x;
 
+    result = backend_data.device->CreateTexture2D(&tex_desc, &subres, &texture);
 
-    backend_data.device->CreateTexture2D(&desc, &subres, &texture);
-    backend_data.device->CreateShaderResourceView(texture, nullptr, &srv);
-
-    return true;
-}
-
-bool Font::Load(const std::filesystem::path& path) const
-{
-    return true;
-}
-
-bool Font::LoadFromSystem(const std::filesystem::path& path) const
-{
-    return true;
-}
-
-RenderContext::RenderContext(const std::string& id)
-    : AbstractRenderContext(id)
-{
-    LOG(Renderer::LOG_CHANNEL_RENDERER, Iwa::Logger::COLOR_DARK_MAGENTA, "RenderContext::RenderContext(0x%x)", id.data())
-}
-
-void RenderContext::DrawRect(const RenderableRect_t& rect)
-{
-    Vec2_t nrm_min = Vec2_t { rect.min.x * 2 - 1, 1 - rect.min.y * 2 };
-    Vec2_t nrm_max = Vec2_t { rect.max.x * 2 - 1, 1 - rect.max.y * 2 };
-
-    uint32_t start_index = this->__vertices.size();
-
-    this->__vertices.emplace_back(Vertex_t{nrm_min, rect.color, {0,0}});
-    this->__vertices.emplace_back(Vertex_t{Vec2_t{nrm_max.x, nrm_min.y}, rect.color, {1,0}});
-    this->__vertices.emplace_back(Vertex_t{nrm_max, rect.color, {1,1}});
-    this->__vertices.emplace_back(Vertex_t{Vec2_t{nrm_min.x, nrm_max.y}, rect.color, {0,1}});
-
-    this->__indicies.emplace_back(start_index);
-    this->__indicies.emplace_back(start_index + 1);
-    this->__indicies.emplace_back(start_index + 2);
-    this->__indicies.emplace_back(start_index + 2);
-    this->__indicies.emplace_back(start_index + 3);
-    this->__indicies.emplace_back(start_index);
-
-    if (this->__indicies_chunks.size() > 0)
+    if (FAILED(result))
     {
-        auto& index_pair = this->__indicies_chunks[this->__indicies_chunks.size()-1];
-        if (index_pair.shader_type != IndexChunkType::BASIC)
-        {
-            this->__indicies_chunks.emplace_back(
-                IndexChunk_t{.index = index_pair.index + 6, .shader_type = IndexChunkType::BASIC, .data = nullptr});
-        }
-        else
-        {
-            index_pair.index += 6;
-        }
+        LogFatal("Coulnd't create glyph texture, code: {:#x}", result);
     }
-    else
-        this->__indicies_chunks.emplace_back(
-            IndexChunk_t{.index = 6, .shader_type = IndexChunkType::BASIC, .data = nullptr});
+
+    D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+    srv_desc.Format = DXGI_FORMAT_R8_UNORM;
+    srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    srv_desc.Texture2D.MipLevels = 1;
+
+    result = backend_data.device->CreateShaderResourceView(texture, &srv_desc, &this->__resource);
+    texture->Release();
+    delete pixels;
+
+    if (FAILED(result))
+    {
+        LogFatal("Coulnd't create glyph shader resource, code: {:#x}", result);
+    }
+
+    return this;
 }
 
-void RenderContext::DrawTexturedRect(const RenderableRect_t& rect, ID3D11ShaderResourceView* resource)
+BitmapFont* BitmapFont::Load(const std::filesystem::path& path, const std::span<const CharRange_t> ranges)
 {
-    Vec2_t nrm_min = Vec2_t { rect.min.x * 2 - 1, 1 - rect.min.y * 2 };
-    Vec2_t nrm_max = Vec2_t { rect.max.x * 2 - 1, 1 - rect.max.y * 2 };
+    return this;
+}
 
-    uint32_t start_index = this->__vertices.size();
-    this->__vertices.emplace_back(Vertex_t{nrm_min, rect.color, {0,0}});
-    this->__vertices.emplace_back(Vertex_t{Vec2_t{nrm_max.x, nrm_min.y}, rect.color, {1,0}});
-    this->__vertices.emplace_back(Vertex_t{nrm_max, rect.color, {1,1}});
-    this->__vertices.emplace_back(Vertex_t{Vec2_t{nrm_min.x, nrm_max.y}, rect.color, {0,1}});
+BitmapFont* BitmapFont::LoadFromSystem(const std::filesystem::path& path)
+{
+    return this;
+}
 
-    this->__indicies.emplace_back(start_index);
-    this->__indicies.emplace_back(start_index + 1);
-    this->__indicies.emplace_back(start_index + 2);
-    this->__indicies.emplace_back(start_index + 2);
-    this->__indicies.emplace_back(start_index + 3);
-    this->__indicies.emplace_back(start_index);
-
-    if (this->__indicies_chunks.size() > 0)
-    {
-        auto& index_pair = this->__indicies_chunks[this->__indicies_chunks.size()-1];
-        if (index_pair.shader_type != IndexChunkType::TEXTURED || index_pair.data != resource)
-        {
-            this->__indicies_chunks.emplace_back(
-                IndexChunk_t{.index = index_pair.index + 6, .shader_type = IndexChunkType::TEXTURED, .data = resource});
-        }
-        else
-        {
-            index_pair.index += 6;
-        }
-    }
-    else
-        this->__indicies_chunks.emplace_back(
-            IndexChunk_t{.index = 6, .shader_type = IndexChunkType::TEXTURED, .data = resource});
+RenderContext::RenderContext(const Renderer* renderer, const std::string& id) : AbstractRenderContext(renderer, id)
+{
+    LogDebug("RenderContext::RenderContext({})", id);
 }
 
 void RenderContext::Render()
 {
-    auto backend_data = Renderer::getInstance()->getBackendData();
+    auto backend_data = this->renderer->getBackendData();
 
     constexpr UINT stride = static_cast<UINT>(sizeof(Vertex_t));
     constexpr UINT vertex_offset = 0;
@@ -282,7 +232,7 @@ void RenderContext::Render()
 
         result = backend_data.device->CreateBuffer(&desc, nullptr, &this->vertex_buffer.ptr);
         if (FAILED(result))
-            LOGE("Failed resizing vertex buffer, code: 0x%x", result);
+            LogFatal("Failed resizing vertex buffer, code: {:#x}", result);
     }
 
     if (!this->index_buffer.ptr || this->index_buffer.size < this->__indicies.size())
@@ -300,7 +250,7 @@ void RenderContext::Render()
 
         HRESULT result = backend_data.device->CreateBuffer(&desc, nullptr, &this->index_buffer.ptr);
         if (FAILED(result))
-            LOGE("Failed resizing index buffer, code: 0x%x", result);
+            LogFatal("Failed resizing index buffer, code: {:#x}", result);
     }
 
     D3D11_MAPPED_SUBRESOURCE vertex_resource, index_resource;
@@ -308,12 +258,12 @@ void RenderContext::Render()
     result = backend_data.device_ctx->Map(this->vertex_buffer.ptr, 0, D3D11_MAP_WRITE_DISCARD, 0, &vertex_resource);
 
     if (FAILED(result))
-        LOGE("Failed mapping vertex buffer, code: 0x%x", result);
+        LogFatal("Failed mapping vertex buffer, code: {:#x}", result);
 
     result = backend_data.device_ctx->Map(this->index_buffer.ptr, 0, D3D11_MAP_WRITE_DISCARD, 0, &index_resource);
 
     if (FAILED(result))
-        LOGE("Failed mapping vertex buffer, code: 0x%x", result);
+        LogFatal("Failed mapping vertex buffer, code: {:#x}", result);
 
     Vertex_t* vertex_dest = static_cast<Vertex_t*>(vertex_resource.pData);
     IndexChunk_t* index_dest = static_cast<IndexChunk_t*>(index_resource.pData);
@@ -343,6 +293,9 @@ void RenderContext::Render()
                 case IndexChunkType::TEXTURED:
                     backend_data.device_ctx->PSSetShader(backend_data.pixel_shader_textured, nullptr, 0);
                     break;
+                case IndexChunkType::TEXT:
+                    backend_data.device_ctx->PSSetShader(backend_data.pixel_shader_text, nullptr, 0);
+                    break;
             }
             cur_chtype = chunk.shader_type;
         }
@@ -351,6 +304,7 @@ void RenderContext::Render()
             case IndexChunkType::BASIC:
                 break;
             case IndexChunkType::TEXTURED:
+            case IndexChunkType::TEXT:
                 ID3D11ShaderResourceView* srv = static_cast<ID3D11ShaderResourceView*>(chunk.data);
                 backend_data.device_ctx->PSSetShaderResources(0, 1, &srv);
                 break;
@@ -380,15 +334,9 @@ void RenderContext::Cleanup()
     }
 }
 
-Renderer::Renderer()
+Renderer::Renderer(const std::string& id) : AbstractRenderer<Renderer, BackendData_t, RenderContext>(id)
 {
-    LOGV("Renderer::Renderer");
-    Logger::getInstance()->Ignore("FRAMESTATS:V");
-}
 
-Renderer::~Renderer()
-{
-    this->Cleanup();
 }
 
 void Renderer::Cleanup()
@@ -405,6 +353,8 @@ void Renderer::Cleanup()
         this->__bd.pixel_shader->Release();
     if (this->__bd.pixel_shader_textured)
         this->__bd.pixel_shader_textured->Release();
+    if (this->__bd.pixel_shader_text)
+        this->__bd.pixel_shader_text->Release();
     if (this->__bd.render_target_view)
         this->__bd.render_target_view->Release();
     if (this->__bd.swap_chain)
@@ -415,9 +365,10 @@ void Renderer::Cleanup()
         this->__bd.device->Release();
 }
 
-HRESULT Renderer::Initialize(ID3D11Device* device, ID3D11DeviceContext* immediate_context, IDXGISwapChain* swap_chain,
+HRESULT Renderer::Initialize(HWND hwnd, ID3D11Device* device, ID3D11DeviceContext* immediate_context, IDXGISwapChain* swap_chain,
                              ID3D11RenderTargetView* render_target_view)
 {
+    this->__bd.hwnd = hwnd;
     this->__bd.device = device;
     this->__bd.device_ctx = immediate_context;
     this->__bd.swap_chain = swap_chain;
@@ -428,17 +379,18 @@ HRESULT Renderer::Initialize(ID3D11Device* device, ID3D11DeviceContext* immediat
 
 HRESULT Renderer::Initialize()
 {
-    LOG(LOG_CHANNEL_RENDERER, Iwa::Logger::COLOR_DARK_MAGENTA, "Initializing renderer with id \"0x%x\"", this->getID());
+    LogDebug("Initializing renderer \"{}\" with render id \"{}\"", this->getID(), this->getRendererID());
 
-    assert(this->__bd.device != nullptr && "\"this->__bd.device\" is null");
-    assert(this->__bd.device_ctx != nullptr && "\"this->__bd.immediate_context\" is null");
-    assert(this->__bd.swap_chain != nullptr && "\"this->__bd.swap_chain\" is null");
-    assert(this->__bd.render_target_view != nullptr && "\"this->__bd.render_target_view\" is null");
+    IWA_ASSERT(this->__bd.device != nullptr && "\"this->__bd.device\" is null");
+    IWA_ASSERT(this->__bd.device_ctx != nullptr && "\"this->__bd.immediate_context\" is null");
+    IWA_ASSERT(this->__bd.swap_chain != nullptr && "\"this->__bd.swap_chain\" is null");
+    IWA_ASSERT(this->__bd.render_target_view != nullptr && "\"this->__bd.render_target_view\" is null");
+    IWA_ASSERT(this->__bd.hwnd != nullptr && "\"this->__bd.hwnd\" is null");
 
     HRESULT result = S_OK;
 
     ID3DBlob* vs_blob = nullptr;
-    constexpr unsigned char shader_data[] = {
+    constexpr uint8_t shader_data[] = {
         #embed "basic_shader.hlsl"
     };
 
@@ -447,19 +399,19 @@ HRESULT Renderer::Initialize()
 
     if (FAILED(result))
     {
-        LOGE("Couldn't compile vertex shader, code: 0x%x", result)
+        LogFatal("Couldn't compile vertex shader, code: {:#x}", result);
         return result;
     }
-    LOG(LOG_CHANNEL_RENDERER, Iwa::Logger::COLOR_DARK_MAGENTA, "Vertex shader compiled");
+    LogDebug("Vertex shader compiled");
     result = this->__bd.device->CreateVertexShader(vs_blob->GetBufferPointer(), vs_blob->GetBufferSize(), nullptr,
                                                    &this->__bd.vertex_shader);
     if (FAILED(result))
     {
-        LOGE("Couldn't create vertex shader, code: 0x%x", result)
+        LogFatal("Couldn't create vertex shader, code: {:#x}", result);
         vs_blob->Release();
         return result;
     }
-    LOG(LOG_CHANNEL_RENDERER, Iwa::Logger::COLOR_DARK_MAGENTA, "Vertex shader created");
+    LogDebug("Vertex shader created");
 
     // Creating input layout
     constexpr D3D11_INPUT_ELEMENT_DESC layout[] = {
@@ -470,49 +422,48 @@ HRESULT Renderer::Initialize()
 
     result = this->__bd.device->CreateInputLayout(layout, ARRAYSIZE(layout), vs_blob->GetBufferPointer(),
                                                   vs_blob->GetBufferSize(), &this->__bd.vertex_layout);
-    LOG(LOG_CHANNEL_RENDERER, Iwa::Logger::COLOR_DARK_MAGENTA, "Input layout created");
+    LogDebug("Input layout created");
     vs_blob->Release();
 
     if (FAILED(result))
     {
-        LOGE("Couldn't create input layout, code: 0x%x", result)
+        LogFatal("Couldn't create input layout, code: {:#x}", result);
         return result;
     }
     this->__bd.device_ctx->IASetInputLayout(this->__bd.vertex_layout);
 
-    // Compiling and creating pixel shader
+    // Compiling and creating pixel shaders
     ID3DBlob* ps_blob = nullptr;
-    result = CompileShader(shader_data, sizeof(shader_data), "PS", "ps_4_0", &ps_blob);
-    if (FAILED(result))
+
+    std::unordered_map<const char*, ID3D11PixelShader**> shaders = {
+        {"PS",          &this->__bd.pixel_shader},
+        {"PSTextured",  &this->__bd.pixel_shader_textured},
+        {"PSText",      &this->__bd.pixel_shader_text}
+    };
+
+    LogDebug("Pixel shaders ({}):", shaders.size());
+
+    for (auto& it : shaders)
     {
-        LOGE("Couldn't compile pixel shader, code: 0x%x", result);
-        return result;
-    }
-    LOG(LOG_CHANNEL_RENDERER, Iwa::Logger::COLOR_DARK_MAGENTA, "Pixel shader compiled");
+        result = CompileShader(shader_data, sizeof(shader_data), it.first, "ps_4_0", &ps_blob);
+        if (FAILED(result))
+        {
+            LogFatal("Couldn't compile \"{}\", code: {:#x}", result, it.first);
+            return result;
+        }
+        result = this->__bd.device->CreatePixelShader(ps_blob->GetBufferPointer(), ps_blob->GetBufferSize(), nullptr, it.second);
 
-    result = this->__bd.device->CreatePixelShader(ps_blob->GetBufferPointer(), ps_blob->GetBufferSize(), nullptr,
-                                                  &this->__bd.pixel_shader);
-    ps_blob->Release();
-    // Compiling and creating textured pixel shader
-    result = CompileShader(shader_data, sizeof(shader_data), "PST", "ps_4_0", &ps_blob);
-    if (FAILED(result))
-    {
-        LOGE("Couldn't compile pixel shader, code: 0x%x", result);
-        return result;
-    }
-    LOG(LOG_CHANNEL_RENDERER, Iwa::Logger::COLOR_DARK_MAGENTA, "Textured pixel shader compiled");
+        if (FAILED(result))
+        {
+            LogFatal("Couldn't create \"{}\", code: {:#x}", result, it.first);
+            return result;
+        }
 
-    result = this->__bd.device->CreatePixelShader(ps_blob->GetBufferPointer(), ps_blob->GetBufferSize(), nullptr,
-                                                  &this->__bd.pixel_shader_textured);
-    ps_blob->Release();
-
-    if (FAILED(result))
-    {
-        LOGE("Couldn't create pixel shader, code: 0x%x", result);
-        return result;
+        ps_blob->Release();
+        LogDebug("   \"{}\" success", it.first);
     }
 
-    LOG(LOG_CHANNEL_RENDERER, Iwa::Logger::COLOR_DARK_MAGENTA, "Pixel shader created");
+    LogDebug("Pixel shaders success");
 
     this->__bd.device_ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
@@ -535,7 +486,7 @@ HRESULT Renderer::Initialize()
     result = this->__bd.device->CreateDepthStencilState(&stencil_desc, &this->__bd.disabled_stencil_state);
     if (FAILED(result))
     {
-        LOGE("Couldn't create depth stencil state, code: 0x%x", result);
+        LogFatal("Couldn't create depth stencil state, code: {:#x}", result);
         return result;
     }
 
@@ -547,7 +498,7 @@ HRESULT Renderer::Initialize()
     blend_desc.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
     blend_desc.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
     blend_desc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
-    blend_desc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
+    blend_desc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA; // D3D11_BLEND_ZERO;
     blend_desc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
     blend_desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
 
@@ -559,52 +510,121 @@ HRESULT Renderer::Initialize()
 	sampler_desc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
 	sampler_desc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
 	sampler_desc.MipLODBias = 0.0f;
-	sampler_desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+	sampler_desc.Filter = D3D11_FILTER_MIN_MAG_MIP_POINT;
 	sampler_desc.ComparisonFunc = D3D11_COMPARISON_ALWAYS;
 	sampler_desc.MinLOD = 0.0f;
 	sampler_desc.MaxLOD = 0.0f;
-	// desc.MinLOD = 0;
-	// desc.MaxLOD = 1000.0f;
 
 	result = this->__bd.device->CreateSamplerState(&sampler_desc, &this->__bd.sampler_state);
 
 	if (FAILED(result))
 	{
-	    LOGE("Couldn't create sampler state, code: 0x%x", result);
+	    LogFatal("Couldn't create sampler state, code: {:#x}", result);
 	    return result;
 	}
 
+    D3D11_BUFFER_DESC constant_buffer_desc{};
+    constant_buffer_desc.ByteWidth = sizeof(ConstantBuffer_t);
+    constant_buffer_desc.Usage = D3D11_USAGE_DYNAMIC;
+    constant_buffer_desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+    constant_buffer_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    constant_buffer_desc.MiscFlags = 0;
+
+    result = this->__bd.device->CreateBuffer(&constant_buffer_desc, nullptr, &this->__bd.constant_buffer);
+
+    if (FAILED(result))
+    {
+        LogFatal("Couldn't create constant buffer, code: {:#x}", result);
+    }
+
     return result;
+}
+
+void Renderer::PreRender()
+{
+    RECT rect{};
+    GetClientRect(this->__bd.hwnd, &rect);
+
+    D3D11_MAPPED_SUBRESOURCE const_buf_resource;
+
+    if (SUCCEEDED(this->__bd.device_ctx->Map(this->__bd.constant_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &const_buf_resource)))
+    {
+        auto constant_buffer = static_cast<ConstantBuffer_t*>(const_buf_resource.pData);
+
+        float left = rect.left;
+        float reft = rect.right;
+        float top = rect.top;
+        float bottom = rect.bottom;
+
+        float model_view_projection[4][4] = {
+            {2.0f / (reft - left),             0.0f,                               0.0f, 0.0f},
+            {0.0f,                             2.0f / (top - bottom),              0.0f, 0.0f},
+            {0.0f,                             0.0f,                               0.5f, 0.0f},
+            {(reft + left) / (left - reft),    (top + bottom) / (bottom - top),    0.5f, 1.0f},
+        };
+
+        std::memcpy(&constant_buffer->model_view_projection, model_view_projection, sizeof(model_view_projection));
+        this->__bd.device_ctx->Unmap(this->__bd.constant_buffer, 0);
+    }
 }
 
 void Renderer::Render()
 {
     this->__frame_count += 1;
 
-    LOG(LOG_CHANNEL_FRAMESTATS, Iwa::Logger::COLOR_LIGHT_CYAN, "[%i] Preparing", this->__frame_count);
-
     float ClearColor[4] = {0.35f, 0.35f, 0.5f, 1.0f};
     float blendFactor[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+
     this->__bd.device_ctx->OMSetBlendState(this->__bd.blend_state, blendFactor, 0xffffffff);
     this->__bd.device_ctx->ClearRenderTargetView(this->__bd.render_target_view, ClearColor);
     this->__bd.device_ctx->VSSetShader(this->__bd.vertex_shader, nullptr, 0);
+    this->__bd.device_ctx->VSSetConstantBuffers(0, 1, &this->__bd.constant_buffer);
     this->__bd.device_ctx->PSSetSamplers(0, 1, &this->__bd.sampler_state);
-
-    LOG(LOG_CHANNEL_FRAMESTATS, Iwa::Logger::COLOR_LIGHT_CYAN, "[%i] Starting rendering Iwa contexts",
-        this->__frame_count);
 
     for (auto& it : this->__contexts)
     {
         auto* id = it.second->getID().data();
-        LOG(LOG_CHANNEL_FRAMESTATS, Iwa::Logger::COLOR_LIGHT_CYAN, "[%i] Context 0x%x: rendering...", this->__frame_count,
-            id);
         it.second->Render();
-        LOG(LOG_CHANNEL_FRAMESTATS, Iwa::Logger::COLOR_LIGHT_CYAN, "[%i] Context 0x%x: success", this->__frame_count, id);
     }
-
-    LOG(LOG_CHANNEL_FRAMESTATS, Iwa::Logger::COLOR_LIGHT_CYAN, "[%i] Presenting... ", this->__frame_count);
 
 #ifdef IWA_SR_AUTO_SWAP
     this->__bd.swap_chain->Present(1, 0);
 #endif
+}
+
+void Renderer::ResizeViewport(Vec2_t size)
+{
+    this->AbstractRenderer::ResizeViewport(size);
+
+    auto [width, height] = size;
+
+    if (this->__bd.device != nullptr)
+    {
+        this->__bd.device_ctx->OMSetRenderTargets(0, nullptr, nullptr);
+        if (this->__bd.render_target_view)
+        {
+            this->__bd.render_target_view->Release();
+            this->__bd.render_target_view = nullptr;
+        }
+
+        HRESULT hr = this->__bd.swap_chain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
+        if (SUCCEEDED(hr))
+        {
+            ID3D11Texture2D* pBackBuffer = nullptr;
+            this->__bd.swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&pBackBuffer);
+
+            this->__bd.device->CreateRenderTargetView(pBackBuffer, nullptr, &this->__bd.render_target_view);
+            pBackBuffer->Release();
+
+            this->__bd.viewport.Width = static_cast<float>(width);
+            this->__bd.viewport.Height = static_cast<float>(height);
+            this->__bd.viewport.MinDepth = 0.0f;
+            this->__bd.viewport.MaxDepth = 1.0f;
+            this->__bd.viewport.TopLeftX = 0;
+            this->__bd.viewport.TopLeftY = 0;
+            this->__bd.device_ctx->RSSetViewports(1, &this->__bd.viewport);
+        }
+
+        this->__bd.device_ctx->OMSetRenderTargets(1, &this->__bd.render_target_view, nullptr);
+    }
 }
