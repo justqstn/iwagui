@@ -10,7 +10,6 @@ set (ROOT ${CMAKE_SOURCE_DIR}/../../iwa)
 
 add_library(iwaguiOSSDK_lib ${SOURCES})
 target_include_directories(iwaguiOSSDK_lib PUBLIC
-    ${ROOT}
     .
 )
 

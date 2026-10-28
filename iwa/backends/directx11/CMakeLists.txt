@@ -10,7 +10,6 @@ set (ROOT ${CMAKE_SOURCE_DIR}/../../iwa)
 
 add_library(iwaguiRenderSDK_lib ${SOURCES})
 target_include_directories(iwaguiRenderSDK_lib PUBLIC
-    ${ROOT}
     .
 )
 

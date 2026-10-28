@@ -4,7 +4,6 @@
 #include "sdk/math.hpp"
 #include "sdk/renderer.hpp"
 
-
 #include <cstdint>
 #include <d3d11.h>
 #include <filesystem>

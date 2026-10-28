@@ -14,10 +14,7 @@ add_library(iwagui STATIC
     ${sdk_srcs})
 
 target_include_directories(iwagui PUBLIC
-    ${ROOT}/deps/ImGui
     .
-    ./sdk/utils
-    ./sdk
 )
 
 message("iwagui build type: " ${CMAKE_BUILD_TYPE})

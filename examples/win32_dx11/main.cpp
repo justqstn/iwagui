@@ -1,11 +1,5 @@
-#include "abstractions.hpp"
-#include "inputs.hpp"
-#include "logger.hpp"
-#include "math.hpp"
-#include "renderer.hpp"
-#include "sdk/directx11.hpp"
-#include "sdk/windows.hpp"
-#include "signal.hpp"
+#include "iwa/directx11.hpp"
+#include "iwa/windows.hpp"
 
 #include <array>
 #include <cmath>

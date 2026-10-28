@@ -2,7 +2,7 @@
 // [SR]     Standalone rendering.
 // ||       If enabled, render handling will be more simplifed.
 // ||       E.g in DX11 you won't needed to call DXGISwapChain::Present()
-// ||       or handle other things.
+// ||       and handle other similar things.
 #define IWA_SR
 #ifdef IWA_SR
     // --- Automatically swap buffers at the end of render call.
