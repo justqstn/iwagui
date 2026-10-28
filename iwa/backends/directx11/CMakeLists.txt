@@ -3,13 +3,14 @@ cmake_minimum_required(VERSION 3.31)
 project(iwaguiRenderCore)
 
 set(SOURCES
-    sdk/directx11.cpp
+    iwa/directx11.cpp
 )
 
 set (ROOT ${CMAKE_SOURCE_DIR}/../../iwa)
 
 add_library(iwaguiRenderSDK_lib ${SOURCES})
 target_include_directories(iwaguiRenderSDK_lib PUBLIC
+    ${ROOT}
     .
 )
 

@@ -12,7 +12,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "thirdparty/stb_image.h"
 
-#include "sdk/directx11.hpp"
+#include "iwa/directx11.hpp"
 #include "sdk/abstractions.hpp"
 #include "sdk/math.hpp"
 #include "sdk/renderer.hpp"
@@ -380,6 +380,8 @@ HRESULT Renderer::Initialize(HWND hwnd, ID3D11Device* device, ID3D11DeviceContex
 HRESULT Renderer::Initialize()
 {
     LogDebug("Initializing renderer \"{}\" with render id \"{}\"", this->getID(), this->getRendererID());
+    LogPushTab();
+    LogPushTab();
 
     IWA_ASSERT(this->__bd.device != nullptr && "\"this->__bd.device\" is null");
     IWA_ASSERT(this->__bd.device_ctx != nullptr && "\"this->__bd.immediate_context\" is null");
@@ -442,6 +444,8 @@ HRESULT Renderer::Initialize()
     };
 
     LogDebug("Pixel shaders ({}):", shaders.size());
+    LogPushTab();
+    LogPushTab();
 
     for (auto& it : shaders)
     {
@@ -460,9 +464,11 @@ HRESULT Renderer::Initialize()
         }
 
         ps_blob->Release();
-        LogDebug("   \"{}\" success", it.first);
+        LogDebug("\"{}\" success", it.first);
     }
 
+    LogPopTab();
+    LogPopTab();
     LogDebug("Pixel shaders success");
 
     this->__bd.device_ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -536,6 +542,9 @@ HRESULT Renderer::Initialize()
     {
         LogFatal("Couldn't create constant buffer, code: {:#x}", result);
     }
+
+    LogPopTab();
+    LogPopTab();
 
     return result;
 }

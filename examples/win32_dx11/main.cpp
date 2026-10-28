@@ -1,5 +1,6 @@
 #include "iwa/directx11.hpp"
 #include "iwa/windows.hpp"
+#include "utils/logger.hpp"
 
 #include <array>
 #include <cmath>
@@ -65,13 +66,15 @@ HRESULT InitWindow(int nCmdShow)
 
 HRESULT InitDevice()
 {
-    HRESULT hr = S_OK;
+    Iwa::LogDebug("Initializing device");
+    Iwa::LogPushTab();
+    HRESULT result = S_OK;
     RECT rc;
 
     GetClientRect(Hwnd, &rc);
     UINT width = rc.right - rc.left;
     UINT height = rc.bottom - rc.top;
-    UINT createDeviceFlags = 0;
+    UINT device_flags = 0;
 
     D3D_DRIVER_TYPE driverTypes[] = {
         D3D_DRIVER_TYPE_HARDWARE,
@@ -80,53 +83,66 @@ HRESULT InitDevice()
     };
 
     UINT numDriverTypes = ARRAYSIZE(driverTypes);
-    D3D_FEATURE_LEVEL featureLevels[] = {
+    D3D_FEATURE_LEVEL feature_levels[] = {
         D3D_FEATURE_LEVEL_11_0,
         D3D_FEATURE_LEVEL_10_1,
         D3D_FEATURE_LEVEL_10_0,
     };
-    UINT numFeatureLevels = ARRAYSIZE(featureLevels);
+    UINT feature_levels_count = ARRAYSIZE(feature_levels);
 
-    DXGI_SWAP_CHAIN_DESC sd;                           // description of swapchain
-    ZeroMemory(&sd, sizeof(sd));                       // clearing because some bytes
-    sd.BufferCount = 1;                                // one buffer because one swapchain
-    sd.BufferDesc.Width = width;                       // width
-    sd.BufferDesc.Height = height;                     // height
-    sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; // pixel format
-    sd.BufferDesc.RefreshRate.Numerator = 240;         // refreshing rate
-    sd.BufferDesc.RefreshRate.Denominator = 1;
-    sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    sd.OutputWindow = Hwnd;
-    sd.SampleDesc.Count = 1;
-    sd.SampleDesc.Quality = 0;
-    sd.Windowed = TRUE;
+    DXGI_SWAP_CHAIN_DESC swap_chain_desc;                           // description of swapchain
+    ZeroMemory(&swap_chain_desc, sizeof(swap_chain_desc));                       // clearing because some bytes
+    swap_chain_desc.BufferCount = 1;                                // one buffer because one swapchain
+    swap_chain_desc.BufferDesc.Width = width;                       // width
+    swap_chain_desc.BufferDesc.Height = height;                     // height
+    swap_chain_desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; // pixel format
+    swap_chain_desc.BufferDesc.RefreshRate.Numerator = 240;         // refreshing rate
+    swap_chain_desc.BufferDesc.RefreshRate.Denominator = 1;
+    swap_chain_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    swap_chain_desc.OutputWindow = Hwnd;
+    swap_chain_desc.SampleDesc.Count = 1;
+    swap_chain_desc.SampleDesc.Quality = 0;
+    swap_chain_desc.Windowed = TRUE;
 
     auto& backend_data = const_cast<Iwa::BackendData_t&>(MainRenderer->getBackendData());
     backend_data.hwnd = Hwnd;
     for (UINT driverTypeIndex = 0; driverTypeIndex < numDriverTypes; driverTypeIndex++)
     {
         D3DDriverType = driverTypes[driverTypeIndex];
-        hr = D3D11CreateDeviceAndSwapChain(nullptr, D3DDriverType, nullptr, createDeviceFlags, featureLevels,
-                                           D3DFeatureLevel, D3D11_SDK_VERSION, &sd, &backend_data.swap_chain,
-                                           &backend_data.device, &D3DFeatureLevel, &backend_data.device_ctx);
+        result = D3D11CreateDeviceAndSwapChain(nullptr, D3DDriverType, nullptr, device_flags, feature_levels,
+                                                   feature_levels_count, D3D11_SDK_VERSION, &swap_chain_desc, &backend_data.swap_chain,
+                                                   &backend_data.device, &D3DFeatureLevel, &backend_data.device_ctx);
 
-        if (SUCCEEDED(hr))
+        if (SUCCEEDED(result))
+        {
+            Iwa::LogDebug("Created device and swap chain, driver type: {}", static_cast<uint64_t>(D3DDriverType));
             break;
+        }
     }
 
-    if (FAILED(hr))
-        return hr;
+    if (FAILED(result))
+    {
+        Iwa::LogFatal("Couldn't create device and swapchain, code: {:#x}", result);
+        return result;
+    }
 
-    ID3D11Texture2D* pBackBuffer = NULL;
-    hr = backend_data.swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&pBackBuffer);
-    if (FAILED(hr))
-        return hr;
 
-    hr = backend_data.device->CreateRenderTargetView(pBackBuffer, NULL, &backend_data.render_target_view);
-    pBackBuffer->Release();
+    ID3D11Texture2D* back_buffer = NULL;
+    result = backend_data.swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&back_buffer);
+    if (FAILED(result))
+    {
+        Iwa::LogFatal("Couldn't get back buffer, code: {:#x}", result);
+        return result;
+    }
 
-    if (FAILED(hr))
-        return hr;
+    result = backend_data.device->CreateRenderTargetView(back_buffer, NULL, &backend_data.render_target_view);
+    back_buffer->Release();
+
+    if (FAILED(result))
+    {
+        Iwa::LogFatal("Couldn't create render target view, code: {:#x}", result);
+        return result;
+    }
 
     backend_data.device_ctx->OMSetRenderTargets(1, &backend_data.render_target_view, nullptr);
 
@@ -138,8 +154,8 @@ HRESULT InitDevice()
     backend_data.viewport.TopLeftX = 0;
     backend_data.viewport.TopLeftY = 0;
 
-    // Attaching viewports to Context
     backend_data.device_ctx->RSSetViewports(1, &backend_data.viewport);
+    Iwa::LogPopTab();
     return S_OK;
 }
 

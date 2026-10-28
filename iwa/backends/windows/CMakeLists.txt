@@ -3,13 +3,14 @@ cmake_minimum_required(VERSION 3.31)
 project(iwaguiOSSDK)
 
 set(SOURCES
-    sdk/windows.cpp
+    iwa/windows.cpp
 )
 
 set (ROOT ${CMAKE_SOURCE_DIR}/../../iwa)
 
 add_library(iwaguiOSSDK_lib ${SOURCES})
 target_include_directories(iwaguiOSSDK_lib PUBLIC
+    ${ROOT}
     .
 )
 

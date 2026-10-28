@@ -15,6 +15,7 @@ add_library(iwagui STATIC
 
 target_include_directories(iwagui PUBLIC
     .
+    ./sdk
 )
 
 message("iwagui build type: " ${CMAKE_BUILD_TYPE})
