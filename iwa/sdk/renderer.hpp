@@ -196,7 +196,7 @@ namespace Iwa
             AbstractRenderContext(const TRenderer* renderer, const std::string& id)
                 : AIDEntity<TRenderContext>(id), HasRenderer<TRenderer>(renderer)
             {
-                LogDebug("[{}] Created new RenderContext {}", this->renderer->getID(), this->getID());
+                LogDebug("Created new RenderContext \"{}\" for renderer \"{}\"", this->getID(), this->renderer->getID());
             }
             ~AbstractRenderContext() { reinterpret_cast<TRenderContext*>(this)->Cleanup(); }
             void RenderRect(const Rect_t& rect, ColorU32_t color)
@@ -305,11 +305,14 @@ namespace Iwa
         class AbstractRenderer : public AIDEntity<TRenderer>, public HasAllocWrapper<TRenderer, const std::string&>
         {
         public:
-            AbstractRenderer(const std::string& id) : AIDEntity<TRenderer>(id) {}
+            AbstractRenderer(const std::string& id) : AIDEntity<TRenderer>(id)
+            {
+                LogDebug("Created new {} Renderer \"{}\"", static_cast<TRenderer*>(this)->getRendererID(), this->getID());
+            }
             // Override in derived classes
             static constexpr const char* getRendererID()
             {
-                static_assert(TRenderer::getRendererID == AbstractRenderer<TRenderer, TBackendData, TRenderContext>::getRendererID(),
+                static_assert(TRenderer::getRendererID == AbstractRenderer<TRenderer, TBackendData, TRenderContext>::getRendererID,
                               "You must override method \"static constexpr const char* getID()\"");
                 return "unnamed-renderer";
             }
