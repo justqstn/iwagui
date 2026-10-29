@@ -1,5 +1,6 @@
 #include "iwa/directx11.hpp"
 #include "iwa/windows.hpp"
+#include "math.hpp"
 #include "utils/logger.hpp"
 
 #include <array>
@@ -15,6 +16,7 @@
 #include <print>
 #include <span>
 #include <type_traits>
+#include <unordered_set>
 #include <vector>
 #include <windef.h>
 #include <windows.h>
@@ -104,7 +106,7 @@ HRESULT InitDevice()
     swap_chain_desc.SampleDesc.Quality = 0;
     swap_chain_desc.Windowed = TRUE;
 
-    auto& backend_data = const_cast<Iwa::BackendData_t&>(MainRenderer->getBackendData());
+    auto& backend_data = MainRenderer->backend_data;
     backend_data.hwnd = Hwnd;
     for (UINT driverTypeIndex = 0; driverTypeIndex < numDriverTypes; driverTypeIndex++)
     {
@@ -156,12 +158,14 @@ HRESULT InitDevice()
 
     backend_data.device_ctx->RSSetViewports(1, &backend_data.viewport);
     Iwa::LogPopTab();
+
     return S_OK;
 }
 
 void CleanupDevice()
 {
-    MainRenderer->Cleanup();
+    MainRenderContext->Destroy();
+    MainRenderer->Destroy();
 }
 
 
@@ -209,14 +213,13 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, LPSTR lpCmdLine, 
         Iwa::CharRange_t::ASCII(),
     };
 
-    Iwa::LogInfo("{}", std::is_destructible_v<Iwa::BitmapFont>);
-
     auto arial_font = Iwa::BitmapFont::New(MainRenderer, "test_font", 55)->Load(arial_font_data, ranges);
     auto verdanai_font = Iwa::BitmapFont::New(MainRenderer, "test_font2", 32)->Load(verdanai_font_data, ranges);
 
     MSG msg = {};
 
-    while (WM_QUIT != msg.message)
+    std::unordered_set<UINT> exit_codes = { WM_QUIT, WM_CLOSE, WM_DESTROY, WM_NCDESTROY };
+    while (!exit_codes.contains(msg.message))
     {
         if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
         {
@@ -229,8 +232,15 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, LPSTR lpCmdLine, 
         MainRenderContext->RenderWText({0,120}, *verdanai_font, L"Привет Hello", 0xFFFFFFFF);
         MainRenderContext->RenderWText({0,140}, *verdanai_font, L"Привет Hello", 0xFFFFFFFF);
         MainRenderer->Render();
+
+        // technologies
+        Rectpx_t t = {0_px, 0_px, 100_px, 100_px};
+        Iwa::LogInfo("{}", t.getArea());
     }
 
+
+    arial_font->Destroy();
+    verdanai_font->Destroy();
     CleanupDevice();
 
     return 0;

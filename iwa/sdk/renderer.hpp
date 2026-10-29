@@ -33,7 +33,7 @@ namespace Iwa
         static CharRange_t Cyrillic() { return {.first_char = 0x0400, .char_count = 0x04FF - 0x0400}; }
     };
 
-    namespace Internal
+    namespace __private__
     {
         struct Vertex_t
         {
@@ -71,35 +71,36 @@ namespace Iwa
         };
 
         template <typename TTexture, typename TRenderer, typename TResource>
-        class AbstractTexture : public AIDEntity<TTexture>,
+        class AbstractTexture : public HasInstanceMap<TTexture>,
                                 public HasRenderer<TRenderer>,
                                 public HasResource<TResource>,
                                 public HasAllocWrapper<TTexture, const TRenderer*, const std::string>
         {
         public:
-
             virtual bool Load(const std::span<const uint8_t> data) = 0;
             virtual bool Load(const std::filesystem::path& path) = 0;
 
         protected:
             AbstractTexture(const TRenderer* renderer, const std::string& id)
-                : Internal::AIDEntity<TTexture>(id), Internal::HasRenderer<TRenderer>(renderer)
+                : __private__::HasInstanceMap<TTexture>(id), __private__::HasRenderer<TRenderer>(renderer)
             {
             }
 
-            virtual ~AbstractTexture() {}
+            ~AbstractTexture()
+            {
+                LogDebug("Deleting Texture \"{}\"", this->getID());
+            }
 
             Vec2_t __size = {-1.0f, -1.0f};
         };
 
         template <typename TFont, typename TRenderer, typename TResource>
-        class AbstractFont : public AIDEntity<TFont>,
+        class AbstractFont : public HasInstanceMap<TFont>,
                              public HasRenderer<TRenderer>,
                              public HasResource<TResource>,
                              public HasAllocWrapper<TFont, const TRenderer*, const std::string&, float>
         {
         public:
-
             TFont* setAtlasSize(Vec2_t size) { this->__atlas_size = size; }
             Vec2_t getAtlasSize() const { return this->__atlas_size; }
 
@@ -113,17 +114,21 @@ namespace Iwa
             float __scale;
 
             AbstractFont(const TRenderer* renderer, const std::string& id, float scale = 48.0f)
-                : AIDEntity<TFont>(id), HasRenderer<TRenderer>(renderer), __scale(scale), __atlas_size({1024,1024})
+                : HasInstanceMap<TFont>(id), HasRenderer<TRenderer>(renderer), __scale(scale), __atlas_size({1024,1024})
             {
             }
-            ~AbstractFont() {}
+            ~AbstractFont()
+            {
+                LogDebug("Deleting Font \"{}\"", this->getID());
+            }
         };
 
         template <typename TFont, typename TRenderer, typename TResource>
         class AbstractBitmapFont : public AbstractFont<TFont, TRenderer, TResource>
         {
         public:
-            // ~AbstractBitmapFont() {}
+            AbstractBitmapFont(const TRenderer* renderer, const std::string& id, float scale = 48.0f)
+                : AbstractFont<TFont, TRenderer, TResource>(renderer, id, scale) {}
 
             const Charset_t& getCharset(char32_t codepoint) const
             {
@@ -180,25 +185,26 @@ namespace Iwa
 
                 return pixels;
             }
-
-            AbstractBitmapFont(const TRenderer* renderer, const std::string& id, float scale = 48.0f)
-                : AbstractFont<TFont, TRenderer, TResource>(renderer, id, scale) {}
-            ~AbstractBitmapFont() {}
         };
 
         template <typename TRenderContext, typename TRenderer, typename TTexture, typename TResource, typename TFont>
-        class AbstractRenderContext : public IRenderable,
+        class AbstractRenderContext : public AbstractRenderable,
                                       public HasRenderer<TRenderer>,
-                                      public AIDEntity<TRenderContext>,
+                                      public HasInstanceMap<TRenderContext>,
                                       public HasAllocWrapper<TRenderContext, const TRenderer*, const std::string&>
         {
         public:
             AbstractRenderContext(const TRenderer* renderer, const std::string& id)
-                : AIDEntity<TRenderContext>(id), HasRenderer<TRenderer>(renderer)
+                : HasInstanceMap<TRenderContext>(id), HasRenderer<TRenderer>(renderer)
             {
                 LogDebug("Created new RenderContext \"{}\" for renderer \"{}\"", this->getID(), this->renderer->getID());
             }
-            ~AbstractRenderContext() { reinterpret_cast<TRenderContext*>(this)->Cleanup(); }
+
+            ~AbstractRenderContext()
+            {
+                LogDebug("Deleting RenderContext \"{}\"", this->getID());
+            }
+
             void RenderRect(const Rect_t& rect, ColorU32_t color)
             {
                 this->__prepare_rect_vertices(rect, color);
@@ -302,13 +308,21 @@ namespace Iwa
         };
 
         template <typename TRenderer, typename TBackendData, typename TRenderContext>
-        class AbstractRenderer : public AIDEntity<TRenderer>, public HasAllocWrapper<TRenderer, const std::string&>
+        class AbstractRenderer : public HasInstanceMap<TRenderer>, public HasAllocWrapper<TRenderer, const std::string&>
         {
         public:
-            AbstractRenderer(const std::string& id) : AIDEntity<TRenderer>(id)
+            AbstractRenderer(const std::string& id) : HasInstanceMap<TRenderer>(id)
             {
                 LogDebug("Created new {} Renderer \"{}\"", static_cast<TRenderer*>(this)->getRendererID(), this->getID());
             }
+
+            ~AbstractRenderer()
+            {
+                LogDebug("Deleting Renderer \"{}\"", this->getID());
+            }
+
+            TBackendData backend_data{};
+
             // Override in derived classes
             static constexpr const char* getRendererID()
             {
@@ -320,9 +334,7 @@ namespace Iwa
             using ContextsMap = std::unordered_map<std::string, TRenderContext*>;
 
             const ContextsMap& getContexts() { return this->__contexts; }
-            const TBackendData& getBackendData() const { return this->__bd; };
 
-            virtual void Cleanup() = 0;
             virtual void PreRender() = 0;
             virtual void Render() = 0;
             virtual void ResizeViewport(Vec2_t size) { this->__viewport_size = size; }
@@ -341,7 +353,6 @@ namespace Iwa
         protected:
             Vec2_t __viewport_size;
             ContextsMap __contexts{};
-            TBackendData __bd{};
             uint64_t __frame_count = 0;
         };
     }

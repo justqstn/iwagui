@@ -41,7 +41,7 @@
 #include <winnt.h>
 
 using namespace Iwa;
-using namespace Iwa::Internal;
+using namespace Iwa::__private__;
 
 
 namespace
@@ -75,18 +75,17 @@ Texture::Texture(const Renderer* renderer, const std::string& id) : AbstractText
 
 Texture::~Texture()
 {
-
+    if (this->getResource())
+        this->getResource()->Release();
 }
 
 bool Texture::Load(const std::span<const uint8_t> data)
 {
     HRESULT result = S_OK;
-    auto& backend_data = this->renderer->getBackendData();
-
-    // todo: refactor ts
+    auto& bd = this->renderer->backend_data;
 
     int image_width, image_height = 0;
-    uint8_t* image_data = stbi_load_from_memory(const_cast<const uint8_t*>(data.data()), data.size(), &image_width, &image_height, nullptr, 4);
+    uint8_t* image_data = stbi_load_from_memory(data.data(), data.size(), &image_width, &image_height, nullptr, 4);
 
     this->__size = Vec2_t(image_width, image_height);
     if (image_data == nullptr)
@@ -110,7 +109,7 @@ bool Texture::Load(const std::span<const uint8_t> data)
     subres.pSysMem = image_data;
     subres.SysMemPitch = tex_desc.Width * 4;
     subres.SysMemSlicePitch = 0;
-    result = backend_data.device->CreateTexture2D(&tex_desc, &subres, &texture);
+    result = bd.device->CreateTexture2D(&tex_desc, &subres, &texture);
     if (FAILED(result))
     {
         LogFatal("Couldn't create Texture2D, code: {:#x}", result);
@@ -122,7 +121,7 @@ bool Texture::Load(const std::span<const uint8_t> data)
     srv_desc.Texture2D.MipLevels = tex_desc.MipLevels;
     srv_desc.Texture2D.MostDetailedMip = 0;
 
-    result = backend_data.device->CreateShaderResourceView(texture, &srv_desc, &this->__resource);
+    result = bd.device->CreateShaderResourceView(texture, &srv_desc, &this->__resource);
     texture->Release();
 
     if (FAILED(result))
@@ -145,14 +144,23 @@ bool Texture::Load(const std::filesystem::path& path)
     return this->Load(file_data);
 }
 
-BitmapFont::BitmapFont(const Renderer* renderer, const std::string& id, float scale) : AbstractBitmapFont<BitmapFont, Renderer, ID3D11ShaderResourceView>(renderer, id, scale) {}
+BitmapFont::BitmapFont(const Renderer* renderer, const std::string& id, float scale)
+    : AbstractBitmapFont<BitmapFont, Renderer, ID3D11ShaderResourceView>(renderer, id, scale)
+{
+}
+
+BitmapFont::~BitmapFont()
+{
+    if (this->isLoaded())
+        this->getResource()->Release();
+}
 
 BitmapFont* BitmapFont::Load(const std::span<const uint8_t> data, const std::span<const CharRange_t> ranges)
 {
     auto pixels = this->__alloc_and_pack_font_bitmap(data, ranges);
 
     HRESULT result = S_OK;
-    auto& backend_data = this->renderer->getBackendData();
+    auto& bd = this->renderer->backend_data;
 
     ID3D11Texture2D* texture = nullptr;
     D3D11_TEXTURE2D_DESC tex_desc = {};
@@ -169,7 +177,7 @@ BitmapFont* BitmapFont::Load(const std::span<const uint8_t> data, const std::spa
     subres.pSysMem = pixels->data();
     subres.SysMemPitch = this->__atlas_size.x;
 
-    result = backend_data.device->CreateTexture2D(&tex_desc, &subres, &texture);
+    result = bd.device->CreateTexture2D(&tex_desc, &subres, &texture);
 
     if (FAILED(result))
     {
@@ -181,7 +189,7 @@ BitmapFont* BitmapFont::Load(const std::span<const uint8_t> data, const std::spa
     srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
     srv_desc.Texture2D.MipLevels = 1;
 
-    result = backend_data.device->CreateShaderResourceView(texture, &srv_desc, &this->__resource);
+    result = bd.device->CreateShaderResourceView(texture, &srv_desc, &this->__resource);
     texture->Release();
     delete pixels;
 
@@ -210,7 +218,7 @@ RenderContext::RenderContext(const Renderer* renderer, const std::string& id) : 
 
 void RenderContext::Render()
 {
-    auto backend_data = this->renderer->getBackendData();
+    auto& bd = this->renderer->backend_data;
 
     constexpr UINT stride = static_cast<UINT>(sizeof(Vertex_t));
     constexpr UINT vertex_offset = 0;
@@ -230,7 +238,7 @@ void RenderContext::Render()
         desc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
         desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
-        result = backend_data.device->CreateBuffer(&desc, nullptr, &this->vertex_buffer.ptr);
+        result = bd.device->CreateBuffer(&desc, nullptr, &this->vertex_buffer.ptr);
         if (FAILED(result))
             LogFatal("Failed resizing vertex buffer, code: {:#x}", result);
     }
@@ -248,19 +256,19 @@ void RenderContext::Render()
         desc.BindFlags = D3D11_BIND_INDEX_BUFFER;
         desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
-        HRESULT result = backend_data.device->CreateBuffer(&desc, nullptr, &this->index_buffer.ptr);
+        HRESULT result = bd.device->CreateBuffer(&desc, nullptr, &this->index_buffer.ptr);
         if (FAILED(result))
             LogFatal("Failed resizing index buffer, code: {:#x}", result);
     }
 
     D3D11_MAPPED_SUBRESOURCE vertex_resource, index_resource;
 
-    result = backend_data.device_ctx->Map(this->vertex_buffer.ptr, 0, D3D11_MAP_WRITE_DISCARD, 0, &vertex_resource);
+    result = bd.device_ctx->Map(this->vertex_buffer.ptr, 0, D3D11_MAP_WRITE_DISCARD, 0, &vertex_resource);
 
     if (FAILED(result))
         LogFatal("Failed mapping vertex buffer, code: {:#x}", result);
 
-    result = backend_data.device_ctx->Map(this->index_buffer.ptr, 0, D3D11_MAP_WRITE_DISCARD, 0, &index_resource);
+    result = bd.device_ctx->Map(this->index_buffer.ptr, 0, D3D11_MAP_WRITE_DISCARD, 0, &index_resource);
 
     if (FAILED(result))
         LogFatal("Failed mapping vertex buffer, code: {:#x}", result);
@@ -271,15 +279,15 @@ void RenderContext::Render()
     std::memcpy(vertex_dest, this->__vertices.data(), this->__vertices.size() * sizeof(Vertex_t));
     std::memcpy(index_dest, this->__indicies.data(), this->__indicies.size() * sizeof(IndexSize_t));
 
-    backend_data.device_ctx->Unmap(this->vertex_buffer.ptr, 0);
-    backend_data.device_ctx->Unmap(this->index_buffer.ptr, 0);
+    bd.device_ctx->Unmap(this->vertex_buffer.ptr, 0);
+    bd.device_ctx->Unmap(this->index_buffer.ptr, 0);
 
-    backend_data.device_ctx->IASetVertexBuffers(0, 1, &this->vertex_buffer.ptr, &stride, &vertex_offset);
-    backend_data.device_ctx->IASetIndexBuffer(this->index_buffer.ptr, DXGI_FORMAT_R32_UINT, 0);
+    bd.device_ctx->IASetVertexBuffers(0, 1, &this->vertex_buffer.ptr, &stride, &vertex_offset);
+    bd.device_ctx->IASetIndexBuffer(this->index_buffer.ptr, DXGI_FORMAT_R32_UINT, 0);
 
     IndexSize_t index_offset = 0;
     IndexChunkType cur_chtype = IndexChunkType::BASIC;
-    backend_data.device_ctx->PSSetShader(backend_data.pixel_shader, nullptr, 0);
+    bd.device_ctx->PSSetShader(bd.pixel_shader, nullptr, 0);
 
 
     for (auto& chunk : this->__indicies_chunks)
@@ -288,13 +296,13 @@ void RenderContext::Render()
         {
             switch (chunk.shader_type) {
                 case IndexChunkType::BASIC:
-                    backend_data.device_ctx->PSSetShader(backend_data.pixel_shader, nullptr, 0);
+                    bd.device_ctx->PSSetShader(bd.pixel_shader, nullptr, 0);
                     break;
                 case IndexChunkType::TEXTURED:
-                    backend_data.device_ctx->PSSetShader(backend_data.pixel_shader_textured, nullptr, 0);
+                    bd.device_ctx->PSSetShader(bd.pixel_shader_textured, nullptr, 0);
                     break;
                 case IndexChunkType::TEXT:
-                    backend_data.device_ctx->PSSetShader(backend_data.pixel_shader_text, nullptr, 0);
+                    bd.device_ctx->PSSetShader(bd.pixel_shader_text, nullptr, 0);
                     break;
             }
             cur_chtype = chunk.shader_type;
@@ -306,11 +314,11 @@ void RenderContext::Render()
             case IndexChunkType::TEXTURED:
             case IndexChunkType::TEXT:
                 ID3D11ShaderResourceView* srv = static_cast<ID3D11ShaderResourceView*>(chunk.data);
-                backend_data.device_ctx->PSSetShaderResources(0, 1, &srv);
+                bd.device_ctx->PSSetShaderResources(0, 1, &srv);
                 break;
         }
 
-        backend_data.device_ctx->DrawIndexed(chunk.index, index_offset, 0);
+        bd.device_ctx->DrawIndexed(chunk.index, index_offset, 0);
         index_offset = chunk.index;
     }
 
@@ -319,19 +327,16 @@ void RenderContext::Render()
     this->__indicies_chunks.clear();
 }
 
-void RenderContext::Cleanup()
+RenderContext::~RenderContext()
 {
     if (this->index_buffer.ptr)
-    {
         this->index_buffer.ptr->Release();
-        this->index_buffer.ptr = nullptr;
-    }
 
     if (this->vertex_buffer.ptr)
-    {
         this->vertex_buffer.ptr->Release();
-        this->vertex_buffer.ptr = nullptr;
-    }
+
+    if (this->render_target_view)
+        this->render_target_view->Release();
 }
 
 Renderer::Renderer(const std::string& id) : AbstractRenderer<Renderer, BackendData_t, RenderContext>(id)
@@ -339,40 +344,40 @@ Renderer::Renderer(const std::string& id) : AbstractRenderer<Renderer, BackendDa
 
 }
 
-void Renderer::Cleanup()
+Renderer::~Renderer()
 {
-    if (this->__bd.disabled_stencil_state)
-        this->__bd.disabled_stencil_state->Release();
-    if (this->__bd.device_ctx)
-        this->__bd.device_ctx->ClearState();
-    if (this->__bd.vertex_layout)
-        this->__bd.vertex_layout->Release();
-    if (this->__bd.vertex_shader)
-        this->__bd.vertex_shader->Release();
-    if (this->__bd.pixel_shader)
-        this->__bd.pixel_shader->Release();
-    if (this->__bd.pixel_shader_textured)
-        this->__bd.pixel_shader_textured->Release();
-    if (this->__bd.pixel_shader_text)
-        this->__bd.pixel_shader_text->Release();
-    if (this->__bd.render_target_view)
-        this->__bd.render_target_view->Release();
-    if (this->__bd.swap_chain)
-        this->__bd.swap_chain->Release();
-    if (this->__bd.device_ctx)
-        this->__bd.device_ctx->Release();
-    if (this->__bd.device)
-        this->__bd.device->Release();
+    if (this->backend_data.disabled_stencil_state)
+        this->backend_data.disabled_stencil_state->Release();
+    if (this->backend_data.device_ctx)
+        this->backend_data.device_ctx->ClearState();
+    if (this->backend_data.vertex_layout)
+        this->backend_data.vertex_layout->Release();
+    if (this->backend_data.vertex_shader)
+        this->backend_data.vertex_shader->Release();
+    if (this->backend_data.pixel_shader)
+        this->backend_data.pixel_shader->Release();
+    if (this->backend_data.pixel_shader_textured)
+        this->backend_data.pixel_shader_textured->Release();
+    if (this->backend_data.pixel_shader_text)
+        this->backend_data.pixel_shader_text->Release();
+    if (this->backend_data.render_target_view)
+        this->backend_data.render_target_view->Release();
+    if (this->backend_data.swap_chain)
+        this->backend_data.swap_chain->Release();
+    if (this->backend_data.device_ctx)
+        this->backend_data.device_ctx->Release();
+    if (this->backend_data.device)
+        this->backend_data.device->Release();
 }
 
 HRESULT Renderer::Initialize(HWND hwnd, ID3D11Device* device, ID3D11DeviceContext* immediate_context, IDXGISwapChain* swap_chain,
                              ID3D11RenderTargetView* render_target_view)
 {
-    this->__bd.hwnd = hwnd;
-    this->__bd.device = device;
-    this->__bd.device_ctx = immediate_context;
-    this->__bd.swap_chain = swap_chain;
-    this->__bd.render_target_view = render_target_view;
+    this->backend_data.hwnd = hwnd;
+    this->backend_data.device = device;
+    this->backend_data.device_ctx = immediate_context;
+    this->backend_data.swap_chain = swap_chain;
+    this->backend_data.render_target_view = render_target_view;
 
     return Initialize();
 }
@@ -381,13 +386,12 @@ HRESULT Renderer::Initialize()
 {
     LogDebug("Initializing renderer \"{}\" with render id \"{}\"", this->getID(), this->getRendererID());
     LogPushTab();
-    LogPushTab();
 
-    IWA_ASSERT(this->__bd.device != nullptr && "\"this->__bd.device\" is null");
-    IWA_ASSERT(this->__bd.device_ctx != nullptr && "\"this->__bd.immediate_context\" is null");
-    IWA_ASSERT(this->__bd.swap_chain != nullptr && "\"this->__bd.swap_chain\" is null");
-    IWA_ASSERT(this->__bd.render_target_view != nullptr && "\"this->__bd.render_target_view\" is null");
-    IWA_ASSERT(this->__bd.hwnd != nullptr && "\"this->__bd.hwnd\" is null");
+    IWA_ASSERT(this->backend_data.device != nullptr && "\"this->__bd.device\" is null");
+    IWA_ASSERT(this->backend_data.device_ctx != nullptr && "\"this->__bd.immediate_context\" is null");
+    IWA_ASSERT(this->backend_data.swap_chain != nullptr && "\"this->__bd.swap_chain\" is null");
+    IWA_ASSERT(this->backend_data.render_target_view != nullptr && "\"this->__bd.render_target_view\" is null");
+    IWA_ASSERT(this->backend_data.hwnd != nullptr && "\"this->__bd.hwnd\" is null");
 
     HRESULT result = S_OK;
 
@@ -405,8 +409,8 @@ HRESULT Renderer::Initialize()
         return result;
     }
     LogDebug("Vertex shader compiled");
-    result = this->__bd.device->CreateVertexShader(vs_blob->GetBufferPointer(), vs_blob->GetBufferSize(), nullptr,
-                                                   &this->__bd.vertex_shader);
+    result = this->backend_data.device->CreateVertexShader(vs_blob->GetBufferPointer(), vs_blob->GetBufferSize(), nullptr,
+                                                   &this->backend_data.vertex_shader);
     if (FAILED(result))
     {
         LogFatal("Couldn't create vertex shader, code: {:#x}", result);
@@ -422,8 +426,8 @@ HRESULT Renderer::Initialize()
         {"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, (UINT)offsetof(Vertex_t, uv), D3D11_INPUT_PER_VERTEX_DATA, 0}
     };
 
-    result = this->__bd.device->CreateInputLayout(layout, ARRAYSIZE(layout), vs_blob->GetBufferPointer(),
-                                                  vs_blob->GetBufferSize(), &this->__bd.vertex_layout);
+    result = this->backend_data.device->CreateInputLayout(layout, ARRAYSIZE(layout), vs_blob->GetBufferPointer(),
+                                                  vs_blob->GetBufferSize(), &this->backend_data.vertex_layout);
     LogDebug("Input layout created");
     vs_blob->Release();
 
@@ -432,19 +436,18 @@ HRESULT Renderer::Initialize()
         LogFatal("Couldn't create input layout, code: {:#x}", result);
         return result;
     }
-    this->__bd.device_ctx->IASetInputLayout(this->__bd.vertex_layout);
+    this->backend_data.device_ctx->IASetInputLayout(this->backend_data.vertex_layout);
 
     // Compiling and creating pixel shaders
     ID3DBlob* ps_blob = nullptr;
 
     std::unordered_map<const char*, ID3D11PixelShader**> shaders = {
-        {"PS",          &this->__bd.pixel_shader},
-        {"PSTextured",  &this->__bd.pixel_shader_textured},
-        {"PSText",      &this->__bd.pixel_shader_text}
+        {"PS",          &this->backend_data.pixel_shader},
+        {"PSTextured",  &this->backend_data.pixel_shader_textured},
+        {"PSText",      &this->backend_data.pixel_shader_text}
     };
 
     LogDebug("Pixel shaders ({}):", shaders.size());
-    LogPushTab();
     LogPushTab();
 
     for (auto& it : shaders)
@@ -455,7 +458,7 @@ HRESULT Renderer::Initialize()
             LogFatal("Couldn't compile \"{}\", code: {:#x}", result, it.first);
             return result;
         }
-        result = this->__bd.device->CreatePixelShader(ps_blob->GetBufferPointer(), ps_blob->GetBufferSize(), nullptr, it.second);
+        result = this->backend_data.device->CreatePixelShader(ps_blob->GetBufferPointer(), ps_blob->GetBufferSize(), nullptr, it.second);
 
         if (FAILED(result))
         {
@@ -468,10 +471,9 @@ HRESULT Renderer::Initialize()
     }
 
     LogPopTab();
-    LogPopTab();
     LogDebug("Pixel shaders success");
 
-    this->__bd.device_ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    this->backend_data.device_ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     D3D11_DEPTH_STENCIL_DESC stencil_desc = {};
     stencil_desc.DepthEnable = false;
@@ -489,14 +491,14 @@ HRESULT Renderer::Initialize()
     stencil_desc.BackFace.StencilPassOp = D3D11_STENCIL_OP_KEEP;
     stencil_desc.BackFace.StencilFunc = D3D11_COMPARISON_ALWAYS;
 
-    result = this->__bd.device->CreateDepthStencilState(&stencil_desc, &this->__bd.disabled_stencil_state);
+    result = this->backend_data.device->CreateDepthStencilState(&stencil_desc, &this->backend_data.disabled_stencil_state);
     if (FAILED(result))
     {
         LogFatal("Couldn't create depth stencil state, code: {:#x}", result);
         return result;
     }
 
-    this->__bd.device_ctx->OMSetDepthStencilState(this->__bd.disabled_stencil_state, 1);
+    this->backend_data.device_ctx->OMSetDepthStencilState(this->backend_data.disabled_stencil_state, 1);
 
     D3D11_BLEND_DESC blend_desc = {};
     blend_desc.RenderTarget[0].BlendEnable = TRUE;
@@ -508,7 +510,7 @@ HRESULT Renderer::Initialize()
     blend_desc.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
     blend_desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
 
-    this->__bd.device->CreateBlendState(&blend_desc, &this->__bd.blend_state);
+    this->backend_data.device->CreateBlendState(&blend_desc, &this->backend_data.blend_state);
 
 
     D3D11_SAMPLER_DESC sampler_desc = {};
@@ -521,7 +523,7 @@ HRESULT Renderer::Initialize()
 	sampler_desc.MinLOD = 0.0f;
 	sampler_desc.MaxLOD = 0.0f;
 
-	result = this->__bd.device->CreateSamplerState(&sampler_desc, &this->__bd.sampler_state);
+	result = this->backend_data.device->CreateSamplerState(&sampler_desc, &this->backend_data.sampler_state);
 
 	if (FAILED(result))
 	{
@@ -536,14 +538,13 @@ HRESULT Renderer::Initialize()
     constant_buffer_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
     constant_buffer_desc.MiscFlags = 0;
 
-    result = this->__bd.device->CreateBuffer(&constant_buffer_desc, nullptr, &this->__bd.constant_buffer);
+    result = this->backend_data.device->CreateBuffer(&constant_buffer_desc, nullptr, &this->backend_data.constant_buffer);
 
     if (FAILED(result))
     {
         LogFatal("Couldn't create constant buffer, code: {:#x}", result);
     }
 
-    LogPopTab();
     LogPopTab();
 
     return result;
@@ -552,11 +553,11 @@ HRESULT Renderer::Initialize()
 void Renderer::PreRender()
 {
     RECT rect{};
-    GetClientRect(this->__bd.hwnd, &rect);
+    GetClientRect(this->backend_data.hwnd, &rect);
 
     D3D11_MAPPED_SUBRESOURCE const_buf_resource;
 
-    if (SUCCEEDED(this->__bd.device_ctx->Map(this->__bd.constant_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &const_buf_resource)))
+    if (SUCCEEDED(this->backend_data.device_ctx->Map(this->backend_data.constant_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &const_buf_resource)))
     {
         auto constant_buffer = static_cast<ConstantBuffer_t*>(const_buf_resource.pData);
 
@@ -573,7 +574,7 @@ void Renderer::PreRender()
         };
 
         std::memcpy(&constant_buffer->model_view_projection, model_view_projection, sizeof(model_view_projection));
-        this->__bd.device_ctx->Unmap(this->__bd.constant_buffer, 0);
+        this->backend_data.device_ctx->Unmap(this->backend_data.constant_buffer, 0);
     }
 }
 
@@ -584,11 +585,11 @@ void Renderer::Render()
     float ClearColor[4] = {0.35f, 0.35f, 0.5f, 1.0f};
     float blendFactor[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 
-    this->__bd.device_ctx->OMSetBlendState(this->__bd.blend_state, blendFactor, 0xffffffff);
-    this->__bd.device_ctx->ClearRenderTargetView(this->__bd.render_target_view, ClearColor);
-    this->__bd.device_ctx->VSSetShader(this->__bd.vertex_shader, nullptr, 0);
-    this->__bd.device_ctx->VSSetConstantBuffers(0, 1, &this->__bd.constant_buffer);
-    this->__bd.device_ctx->PSSetSamplers(0, 1, &this->__bd.sampler_state);
+    this->backend_data.device_ctx->OMSetBlendState(this->backend_data.blend_state, blendFactor, 0xffffffff);
+    this->backend_data.device_ctx->ClearRenderTargetView(this->backend_data.render_target_view, ClearColor);
+    this->backend_data.device_ctx->VSSetShader(this->backend_data.vertex_shader, nullptr, 0);
+    this->backend_data.device_ctx->VSSetConstantBuffers(0, 1, &this->backend_data.constant_buffer);
+    this->backend_data.device_ctx->PSSetSamplers(0, 1, &this->backend_data.sampler_state);
 
     for (auto& it : this->__contexts)
     {
@@ -597,7 +598,7 @@ void Renderer::Render()
     }
 
 #ifdef IWA_SR_AUTO_SWAP
-    this->__bd.swap_chain->Present(1, 0);
+    this->backend_data.swap_chain->Present(1, 0);
 #endif
 }
 
@@ -607,33 +608,33 @@ void Renderer::ResizeViewport(Vec2_t size)
 
     auto [width, height] = size;
 
-    if (this->__bd.device != nullptr)
+    if (this->backend_data.device != nullptr)
     {
-        this->__bd.device_ctx->OMSetRenderTargets(0, nullptr, nullptr);
-        if (this->__bd.render_target_view)
+        this->backend_data.device_ctx->OMSetRenderTargets(0, nullptr, nullptr);
+        if (this->backend_data.render_target_view)
         {
-            this->__bd.render_target_view->Release();
-            this->__bd.render_target_view = nullptr;
+            this->backend_data.render_target_view->Release();
+            this->backend_data.render_target_view = nullptr;
         }
 
-        HRESULT hr = this->__bd.swap_chain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
+        HRESULT hr = this->backend_data.swap_chain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
         if (SUCCEEDED(hr))
         {
             ID3D11Texture2D* pBackBuffer = nullptr;
-            this->__bd.swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&pBackBuffer);
+            this->backend_data.swap_chain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&pBackBuffer);
 
-            this->__bd.device->CreateRenderTargetView(pBackBuffer, nullptr, &this->__bd.render_target_view);
+            this->backend_data.device->CreateRenderTargetView(pBackBuffer, nullptr, &this->backend_data.render_target_view);
             pBackBuffer->Release();
 
-            this->__bd.viewport.Width = static_cast<float>(width);
-            this->__bd.viewport.Height = static_cast<float>(height);
-            this->__bd.viewport.MinDepth = 0.0f;
-            this->__bd.viewport.MaxDepth = 1.0f;
-            this->__bd.viewport.TopLeftX = 0;
-            this->__bd.viewport.TopLeftY = 0;
-            this->__bd.device_ctx->RSSetViewports(1, &this->__bd.viewport);
+            this->backend_data.viewport.Width = static_cast<float>(width);
+            this->backend_data.viewport.Height = static_cast<float>(height);
+            this->backend_data.viewport.MinDepth = 0.0f;
+            this->backend_data.viewport.MaxDepth = 1.0f;
+            this->backend_data.viewport.TopLeftX = 0;
+            this->backend_data.viewport.TopLeftY = 0;
+            this->backend_data.device_ctx->RSSetViewports(1, &this->backend_data.viewport);
         }
 
-        this->__bd.device_ctx->OMSetRenderTargets(1, &this->__bd.render_target_view, nullptr);
+        this->backend_data.device_ctx->OMSetRenderTargets(1, &this->backend_data.render_target_view, nullptr);
     }
 }

@@ -4,9 +4,9 @@
 #include <string_view>
 
 using namespace Iwa;
-using namespace Iwa::Internal;
+using namespace Iwa::__private__;
 
-uint8_t Internal::TabCount = 0;
+uint8_t __private__::TabCount = 0;
 
 FmtString::FmtString(std::string_view str, const std::source_location& loc) : str(str), loc(loc) {}
 FmtString::FmtString(const char* str, const std::source_location& loc) : str(str), loc(loc) {}
@@ -15,10 +15,11 @@ FmtString::FmtString(const char* str, const std::source_location& loc) : str(str
 // todo: implement error handling
 void Iwa::LogPushTab()
 {
-    Internal::TabCount += 1;
+    __private__::TabCount += 1;
 }
 
 void Iwa::LogPopTab()
 {
-    Internal::TabCount -= 1;
+    if (__private__::TabCount == 0) LogWarn("Missing LogPushTab(), ignoring pop");
+    else __private__::TabCount -= 1;
 }

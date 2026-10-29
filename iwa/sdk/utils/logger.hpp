@@ -15,7 +15,7 @@
 
 namespace Iwa
 {
-    namespace Internal
+    namespace __private__
     {
         struct FmtString
         {
@@ -34,16 +34,16 @@ namespace Iwa
 
     #ifdef IWA_LOGGING
     template <typename... TArgs>
-    void Log(std::string_view channel, std::string_view color, const Internal::FmtString& fmt, TArgs... args)
+    void Log(std::string_view channel, std::string_view color, const __private__::FmtString& fmt, TArgs... args)
     {
         auto filename = static_cast<std::string_view>(fmt.loc.file_name());
 
         char* tabs = nullptr;
-        if (Internal::TabCount > 0)
+        if (__private__::TabCount > 0)
         {
-            tabs = new char[Internal::TabCount+1];
-            std::memset(tabs, '\t', Internal::TabCount);
-            tabs[Internal::TabCount] = '\0';
+            tabs = new char[__private__::TabCount+1];
+            std::memset(tabs, '\t', __private__::TabCount);
+            tabs[__private__::TabCount] = '\0';
         }
         else
             tabs = const_cast<char*>("");
@@ -63,7 +63,7 @@ namespace Iwa
         )),
                      args...);
 
-        if (Internal::TabCount > 0)
+        if (__private__::TabCount > 0)
             delete[] tabs;
     }
     #else
@@ -72,38 +72,38 @@ namespace Iwa
     #endif
 
     template <typename... TArgs>
-    inline void LogFatal(const Internal::FmtString& fmt, TArgs... args)
+    inline void LogFatal(const __private__::FmtString& fmt, TArgs... args)
     {
         Log("FATAL", "38;2;190;20;20", fmt, args...);
         return IWA_ASSERT(0 && "Fatal error!" == std::format(std::dynamic_format(fmt.str), args...));
     }
 
     template <typename... TArgs>
-    inline void LogError(const Internal::FmtString& fmt, TArgs... args)
+    inline void LogError(const __private__::FmtString& fmt, TArgs... args)
     {
         return Log("ERROR", "38;2;255;20;20", fmt, args...);
     }
 
     template <typename... TArgs>
-    inline void LogWarn(const Internal::FmtString& fmt, TArgs... args)
+    inline void LogWarn(const __private__::FmtString& fmt, TArgs... args)
     {
         return Log("WARN", "38;2;255;196;60", fmt, args...);
     }
 
     template <typename... TArgs>
-    inline void LogInfo(const Internal::FmtString& fmt, TArgs... args)
+    inline void LogInfo(const __private__::FmtString& fmt, TArgs... args)
     {
         return Log("INFO", "38;2;128;128;255", fmt, args...);
     }
 
     template <typename... TArgs>
-    inline void LogDebug(const Internal::FmtString& fmt, TArgs... args)
+    inline void LogDebug(const __private__::FmtString& fmt, TArgs... args)
     {
         return Log("DEBUG", "38;2;200;200;200", fmt, args...);
     }
 
     template <typename... TArgs>
-    inline void LogVerbose(const Internal::FmtString& fmt, TArgs... args)
+    inline void LogVerbose(const __private__::FmtString& fmt, TArgs... args)
     {
         return Log("VERBOSE", "38;2;100;100;100", fmt, args...);
     }

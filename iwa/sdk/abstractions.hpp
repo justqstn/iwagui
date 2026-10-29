@@ -10,7 +10,7 @@
 
 namespace Iwa
 {
-    namespace Internal
+    namespace __private__
     {
         template<typename TObject, typename... TConstructorArgs>
         struct HasAllocWrapper
@@ -18,20 +18,19 @@ namespace Iwa
             struct Wrapper : public TObject
             {
                 constexpr IWA_FORCEINLINE Wrapper(TConstructorArgs... args) : TObject(args...) {}
-                constexpr IWA_FORCEINLINE ~Wrapper() { delete this; }
+                constexpr IWA_FORCEINLINE ~Wrapper() { }
             };
 
             constexpr static IWA_FORCEINLINE TObject* New(TConstructorArgs... args)
             {
                 return static_cast<TObject*>(new Wrapper(args...));
             }
-            constexpr IWA_FORCEINLINE void Destroy() { return delete static_cast<Wrapper*>(this); }
+            constexpr IWA_FORCEINLINE void Destroy() { return delete (static_cast<Wrapper*>(this)); }
         };
 
-        struct IRenderable
+        struct AbstractRenderable
         {
             virtual void Render() = 0;
-            virtual void Cleanup() = 0;
         };
 
         template<typename TRenderer>
@@ -51,24 +50,24 @@ namespace Iwa
             TResource* __resource = nullptr;
         };
 
-        template <typename TEntity>
-        struct AIDEntity
+        template <typename TObject>
+        struct HasInstanceMap
         {
         public:
-            AIDEntity(const std::string& id)
+            HasInstanceMap(const std::string& id)
             {
                 this->__id = id;
-                __entities[id] = static_cast<TEntity*>(this);
+                __entities[id] = static_cast<TObject*>(this);
             }
-            ~AIDEntity() noexcept
+            ~HasInstanceMap() noexcept
             {
                 __entities.erase(this->__id);
             }
 
 
-            constexpr auto operator<=>(const AIDEntity<TEntity>&) const = default;
+            constexpr auto operator<=>(const HasInstanceMap<TObject>&) const = default;
 
-            static TEntity* getByID(const std::string& id) noexcept
+            static TObject* getByID(const std::string& id) noexcept
             {
                 if (__entities.contains(id))
                     return __entities[id];
@@ -78,10 +77,10 @@ namespace Iwa
             const std::string& getID() const { return this->__id; }
         private:
             std::string __id;
-            static std::unordered_map<std::string_view, TEntity*> __entities;
+            static std::unordered_map<std::string_view, TObject*> __entities;
         };
 
         template<typename TEntity>
-        std::unordered_map<std::string_view, TEntity*> AIDEntity<TEntity>::__entities = {};
+        std::unordered_map<std::string_view, TEntity*> HasInstanceMap<TEntity>::__entities = {};
     }
 } // namespace Iwa
