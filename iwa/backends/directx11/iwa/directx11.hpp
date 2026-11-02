@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <d3d11.h>
 #include <filesystem>
+#include <functional>
 #include <vector>
 #include <windef.h>
 #include <winnt.h>
@@ -119,13 +120,28 @@ namespace Iwa
         Initialize(HWND hwnd, ID3D11Device* device, ID3D11DeviceContext* immediate_context, IDXGISwapChain* swap_chain,
                    ID3D11RenderTargetView* render_target_view);
 
+#ifdef IWA_SR
+        bool CreateDevice(HWND hwnd);
+        void DestroyDevice();
+#endif
+
         void Render() override;
         void PreRender() override;
         void ResizeViewport() override;
 
     protected:
-
         Renderer(const std::string& id);
         ~Renderer();
+
+    private:
+        void __release_device_resources();
+#ifdef IWA_SR_AUTO_RESIZE
+        void __install_sr_auto_resize_hook();
+        void __uninstall_sr_auto_resize_hook();
+        std::function<void(HWND, UINT, WPARAM, LPARAM)> __sr_wndproc_hook;
+        Signal<HWND, UINT, WPARAM, LPARAM>::listener_id_t __sr_wndproc_hook_id = 0;
+        bool __sr_wndproc_hook_installed = false;
+        bool __sr_handling_resize = false;
+#endif
     };
 } // namespace Iwa

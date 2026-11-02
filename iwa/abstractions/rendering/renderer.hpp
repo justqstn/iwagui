@@ -2,13 +2,18 @@
 
 #include "abstractions/rendering/fonts.hpp"
 #include "abstractions/rendering/types.hpp"
+#include "config.hpp"
 #include "utils/logger.hpp"
+#include "utils/signal.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <format>
 #include <limits>
 #include <string>
 #include <string_view>
@@ -47,11 +52,17 @@ namespace Iwa
             virtual void Render() = 0;
             virtual void ResizeViewport() = 0;
 
+            Signal<> onPreRenderSignal;
+            Signal<> onRenderSignal;
+            Signal<> onPostRenderSignal;
+
+            void OnRender() { this->onRenderSignal.call(); }
+
             using ScissorEntry_t = std::pair<std::pair<size_t, size_t>, Rect_t>;
 
             void PushScissorRect(const Rect_t& rect)
             {
-                const size_t begin = this->__indicies_chunks.size();
+                const size_t begin = this->__indices_chunks.size();
                 this->__scissor_queue.push_back({{begin, std::numeric_limits<size_t>::max()}, rect});
             }
 
@@ -61,7 +72,7 @@ namespace Iwa
                 {
                     if (it->first.second == std::numeric_limits<size_t>::max())
                     {
-                        it->first.second = this->__indicies_chunks.size();
+                        it->first.second = this->__indices_chunks.size();
                         break;
                     }
                 }
@@ -93,6 +104,59 @@ namespace Iwa
             void RenderLine(Vec2_t p0, Vec2_t p1, Color_t color, float thickness = 1.0f)
             {
                 const IndexSize_t index_count = this->__prepare_line_vertices(p0, p1, color, thickness);
+                if (index_count == 0)
+                    return;
+                this->__prepare_index_chunk(IndexChunkType::CIRCLE, index_count);
+            }
+
+            void RenderBezierQuadratic(Vec2_t p0, Vec2_t p1, Vec2_t p2, Color_t color, float thickness = 1.0f,
+                                       int segments = 32)
+            {
+                const int max_segments = std::clamp(segments, 1, 256);
+                const float approx_len = __vec2_distance(p0, p1) + __vec2_distance(p1, p2);
+                const int n = __adaptive_segment_count(approx_len, max_segments);
+
+                std::array<Vec2_t, 257> points{};
+                points[0] = p0;
+                size_t count = 1;
+                for (int i = 1; i <= n; ++i)
+                {
+                    const float t = static_cast<float>(i) / static_cast<float>(n);
+                    const Vec2_t cur = __eval_bezier_quadratic(p0, p1, p2, t);
+                    if (__vec2_distance_sq(points[count - 1], cur) < 1e-12f)
+                        continue;
+                    points[count++] = cur;
+                }
+
+                const IndexSize_t index_count =
+                    this->__prepare_polyline_vertices(points.data(), count, color, thickness);
+                if (index_count == 0)
+                    return;
+                this->__prepare_index_chunk(IndexChunkType::CIRCLE, index_count);
+            }
+
+            void RenderBezierCubic(Vec2_t p0, Vec2_t p1, Vec2_t p2, Vec2_t p3, Color_t color, float thickness = 1.0f,
+                                   int segments = 32)
+            {
+                const int max_segments = std::clamp(segments, 1, 256);
+                const float approx_len =
+                    __vec2_distance(p0, p1) + __vec2_distance(p1, p2) + __vec2_distance(p2, p3);
+                const int n = __adaptive_segment_count(approx_len, max_segments);
+
+                std::array<Vec2_t, 257> points{};
+                points[0] = p0;
+                size_t count = 1;
+                for (int i = 1; i <= n; ++i)
+                {
+                    const float t = static_cast<float>(i) / static_cast<float>(n);
+                    const Vec2_t cur = __eval_bezier_cubic(p0, p1, p2, p3, t);
+                    if (__vec2_distance_sq(points[count - 1], cur) < 1e-12f)
+                        continue;
+                    points[count++] = cur;
+                }
+
+                const IndexSize_t index_count =
+                    this->__prepare_polyline_vertices(points.data(), count, color, thickness);
                 if (index_count == 0)
                     return;
                 this->__prepare_index_chunk(IndexChunkType::CIRCLE, index_count);
@@ -253,6 +317,18 @@ namespace Iwa
             const double getDeltaTime() const { return this->__delta_time; }
             Vec2_t getViewportSize() const { return this->__viewport_rect.getSize(); }
 
+            const std::string_view getDebugString() const
+            {
+#ifdef IWA_FRAME_DEBUG_INFO
+                return this->__debug_info;
+#else
+                return "";
+#endif
+            }
+
+            bool isVSyncEnabled() const { return this->__vsync_enabled; }
+            void setVSyncEnabled(bool enabled) { this->__vsync_enabled = enabled; }
+
         protected:
             template <typename TFont>
             static constexpr bool __is_dynamic_font_v =
@@ -265,26 +341,58 @@ namespace Iwa
                                   std::remove_cvref_t<TFont>>;
 
             std::vector<Vertex_t> __vertices = {};
-            std::vector<IndexSize_t> __indicies = {};
-            std::vector<IndexChunk_t> __indicies_chunks = {};
+            std::vector<IndexSize_t> __indices = {};
+            std::vector<IndexChunk_t> __indices_chunks = {};
             std::deque<ScissorEntry_t> __scissor_queue = {};
+            Rect_t __viewport_rect{0, 0, 0, 0};
             double __delta_time = 1.0f / 60.0f;
-            Rect_t __viewport_rect{0,0,0,0};
             uint64_t __frame_count = 0;
+
+#ifdef IWA_FRAME_DEBUG_INFO
+            size_t __scissor_rects_count = 0;
+#endif
 
             void __resize_viewport_impl(const Rect_t& rect)
             {
                 this->__viewport_rect = rect;
             }
 
-            void __pre_render_impl() { __begin_frame_timepoint = clock_t::now(); }
+            void __pre_render_impl()
+            {
+                __begin_frame_timepoint = clock_t::now();
+                this->onPreRenderSignal.call();
+            }
 
             void __post_render_impl()
             {
-                __delta_time = std::chrono::duration<double>(__begin_frame_timepoint - __end_frame_timepoint).count();
-                __end_frame_timepoint = __begin_frame_timepoint;
+                this->__delta_time = std::chrono::duration<double>(__begin_frame_timepoint - __end_frame_timepoint).count();
+                this->__end_frame_timepoint = __begin_frame_timepoint;
                 this->__cut_index_chunk = false;
+                this->onPostRenderSignal.call();
+
+#ifdef IWA_FRAME_DEBUG_INFO
+                this->__debug_info =
+                    std::format("v: {} i: {} dc: {} sq: {} fps: {}", this->__vertices.size(), this->__indices.size(),
+                                this->__indices_chunks.size(), this->__scissor_rects_count,
+                                static_cast<int>(1 / this->getDeltaTime()));
+#endif
+
+                this->__vertices.clear();
+                this->__indices.clear();
+                this->__indices_chunks.clear();
+                this->__scissor_queue.clear();
             }
+
+#ifdef IWA_SR_AUTO_RESIZE
+            void __ensure_on_render_hooks() const
+            {
+                if (this->onRenderSignal.empty())
+                {
+                    LogFatal("IWA_SR_AUTO_RESIZE requires at least one OnRender hook "
+                             "(onRenderSignal / OnRender callbacks)");
+                }
+            }
+#endif
 
             template <typename TFont>
             inline void __render_char_impl(Vec2_t& pos, const TFont& font, char32_t character, ColorU32_t color)
@@ -306,6 +414,47 @@ namespace Iwa
                 {
                     this->__prepare_index_chunk(IndexChunkType::TEXT, 6, font.getResource());
                 }
+            }
+
+            static inline float __vec2_distance_sq(Vec2_t a, Vec2_t b)
+            {
+                const Vec2_t d = b - a;
+                return d.x * d.x + d.y * d.y;
+            }
+
+            static inline float __vec2_distance(Vec2_t a, Vec2_t b)
+            {
+                return std::sqrt(__vec2_distance_sq(a, b));
+            }
+
+            static inline Vec2_t __vec2_normalize(Vec2_t v, Vec2_t fallback = {1.0f, 0.0f})
+            {
+                const float len_sq = v.x * v.x + v.y * v.y;
+                if (len_sq < 1e-12f)
+                    return fallback;
+                const float inv_len = 1.0f / std::sqrt(len_sq);
+                return {v.x * inv_len, v.y * inv_len};
+            }
+
+            static inline int __adaptive_segment_count(float approx_len, int max_segments)
+            {
+                constexpr float kPixelsPerSegment = 4.0f;
+                const int needed = static_cast<int>(std::ceil(std::max(approx_len, 0.0f) / kPixelsPerSegment));
+                return std::clamp(needed, 1, max_segments);
+            }
+
+            static inline Vec2_t __eval_bezier_quadratic(Vec2_t p0, Vec2_t p1, Vec2_t p2, float t)
+            {
+                const float u = 1.0f - t;
+                return p0 * (u * u) + p1 * (2.0f * u * t) + p2 * (t * t);
+            }
+
+            static inline Vec2_t __eval_bezier_cubic(Vec2_t p0, Vec2_t p1, Vec2_t p2, Vec2_t p3, float t)
+            {
+                const float u = 1.0f - t;
+                const float uu = u * u;
+                const float tt = t * t;
+                return p0 * (uu * u) + p1 * (3.0f * uu * t) + p2 * (3.0f * u * tt) + p3 * (tt * t);
             }
 
             inline void __prepare_rect_vertices(const Rect_t& rect, ColorU32_t color,
@@ -339,26 +488,34 @@ namespace Iwa
                 this->__vertices.emplace_back(make_vertex(rect.getBR(), uv_box.getBR()));
                 this->__vertices.emplace_back(make_vertex(rect.getBL(), uv_box.getBL()));
 
-                this->__indicies.emplace_back(start_index);
-                this->__indicies.emplace_back(start_index + 1);
-                this->__indicies.emplace_back(start_index + 2);
-                this->__indicies.emplace_back(start_index + 2);
-                this->__indicies.emplace_back(start_index + 3);
-                this->__indicies.emplace_back(start_index);
+                this->__indices.emplace_back(start_index);
+                this->__indices.emplace_back(start_index + 1);
+                this->__indices.emplace_back(start_index + 2);
+                this->__indices.emplace_back(start_index + 2);
+                this->__indices.emplace_back(start_index + 3);
+                this->__indices.emplace_back(start_index);
             }
 
             inline IndexSize_t __prepare_line_vertices(Vec2_t p0, Vec2_t p1, ColorU32_t color, float thickness)
             {
-                thickness = std::max(thickness, 1e-3f);
-                const Vec2_t delta = p1 - p0;
-                const float len_sq = delta.x * delta.x + delta.y * delta.y;
-                if (len_sq < 1e-12f)
+                if (__vec2_distance_sq(p0, p1) < 1e-12f)
+                    return 0;
+                const Vec2_t points[2] = {p0, p1};
+                return this->__prepare_polyline_vertices(points, 2, color, thickness);
+            }
+
+            inline IndexSize_t __prepare_polyline_vertices(const Vec2_t* points, size_t count, ColorU32_t color,
+                                                           float thickness)
+            {
+                if (points == nullptr || count < 2)
                     return 0;
 
-                const float inv_len = 1.0f / std::sqrt(len_sq);
-                const Vec2_t dir{delta.x * inv_len, delta.y * inv_len};
-                Vec2_t normal{-dir.y, dir.x};
-                const Vec2_t offset = normal * (thickness * 0.5f);
+                thickness = std::max(thickness, 1e-3f);
+                const float half = thickness * 0.5f;
+                const size_t segment_count = count - 1;
+
+                this->__vertices.reserve(this->__vertices.size() + count * 2);
+                this->__indices.reserve(this->__indices.size() + segment_count * 6);
 
                 const uint32_t start_index = static_cast<uint32_t>(this->__vertices.size());
                 const auto make_vertex = [&](Vec2_t pos) {
@@ -374,19 +531,48 @@ namespace Iwa
                                     .shadow_offset_y = 0.0f};
                 };
 
-                this->__vertices.emplace_back(make_vertex(p0 - offset));
-                this->__vertices.emplace_back(make_vertex(p0 + offset));
-                this->__vertices.emplace_back(make_vertex(p1 + offset));
-                this->__vertices.emplace_back(make_vertex(p1 - offset));
+                for (size_t i = 0; i < count; ++i)
+                {
+                    Vec2_t normal;
+                    if (i == 0)
+                    {
+                        const Vec2_t dir = __vec2_normalize(points[1] - points[0]);
+                        normal = {-dir.y, dir.x};
+                    }
+                    else if (i + 1 == count)
+                    {
+                        const Vec2_t dir = __vec2_normalize(points[i] - points[i - 1]);
+                        normal = {-dir.y, dir.x};
+                    }
+                    else
+                    {
+                        const Vec2_t dir0 = __vec2_normalize(points[i] - points[i - 1]);
+                        const Vec2_t dir1 = __vec2_normalize(points[i + 1] - points[i], dir0);
+                        const Vec2_t n0{-dir0.y, dir0.x};
+                        const Vec2_t n1{-dir1.y, dir1.x};
+                        normal = __vec2_normalize(n0 + n1, n0);
+                    }
 
-                this->__indicies.emplace_back(start_index + 0);
-                this->__indicies.emplace_back(start_index + 1);
-                this->__indicies.emplace_back(start_index + 2);
-                this->__indicies.emplace_back(start_index + 0);
-                this->__indicies.emplace_back(start_index + 2);
-                this->__indicies.emplace_back(start_index + 3);
+                    const Vec2_t offset = normal * half;
+                    this->__vertices.emplace_back(make_vertex(points[i] - offset));
+                    this->__vertices.emplace_back(make_vertex(points[i] + offset));
+                }
 
-                return 6;
+                for (size_t i = 0; i < segment_count; ++i)
+                {
+                    const uint32_t i0 = start_index + static_cast<uint32_t>(i * 2);
+                    const uint32_t i1 = i0 + 1;
+                    const uint32_t i2 = i0 + 2;
+                    const uint32_t i3 = i0 + 3;
+                    this->__indices.emplace_back(i0);
+                    this->__indices.emplace_back(i1);
+                    this->__indices.emplace_back(i3);
+                    this->__indices.emplace_back(i0);
+                    this->__indices.emplace_back(i3);
+                    this->__indices.emplace_back(i2);
+                }
+
+                return static_cast<IndexSize_t>(segment_count * 6);
             }
 
             inline IndexSize_t __prepare_line_shadow_vertices(Vec2_t p0, Vec2_t p1, ColorU32_t color,
@@ -432,12 +618,12 @@ namespace Iwa
                 this->__vertices.emplace_back(make_vertex(center + along + perp, {1.0f, 1.0f}));
                 this->__vertices.emplace_back(make_vertex(center - along + perp, {0.0f, 1.0f}));
 
-                this->__indicies.emplace_back(start_index);
-                this->__indicies.emplace_back(start_index + 1);
-                this->__indicies.emplace_back(start_index + 2);
-                this->__indicies.emplace_back(start_index + 2);
-                this->__indicies.emplace_back(start_index + 3);
-                this->__indicies.emplace_back(start_index);
+                this->__indices.emplace_back(start_index);
+                this->__indices.emplace_back(start_index + 1);
+                this->__indices.emplace_back(start_index + 2);
+                this->__indices.emplace_back(start_index + 2);
+                this->__indices.emplace_back(start_index + 3);
+                this->__indices.emplace_back(start_index);
 
                 return 6;
             }
@@ -461,9 +647,9 @@ namespace Iwa
                 this->__vertices.emplace_back(make_vertex(p0));
                 this->__vertices.emplace_back(make_vertex(p1));
                 this->__vertices.emplace_back(make_vertex(p2));
-                this->__indicies.emplace_back(start_index);
-                this->__indicies.emplace_back(start_index + 1);
-                this->__indicies.emplace_back(start_index + 2);
+                this->__indices.emplace_back(start_index);
+                this->__indices.emplace_back(start_index + 1);
+                this->__indices.emplace_back(start_index + 2);
                 return 3;
             }
 
@@ -508,9 +694,9 @@ namespace Iwa
                 {
                     const uint32_t i1 = start_index + 1 + static_cast<uint32_t>(i);
                     const uint32_t i2 = start_index + 1 + static_cast<uint32_t>((i + 1) % segments);
-                    this->__indicies.emplace_back(start_index);
-                    this->__indicies.emplace_back(i1);
-                    this->__indicies.emplace_back(i2);
+                    this->__indices.emplace_back(start_index);
+                    this->__indices.emplace_back(i1);
+                    this->__indices.emplace_back(i2);
                 }
 
                 return static_cast<IndexSize_t>(segments * 3);
@@ -557,12 +743,12 @@ namespace Iwa
                     const uint32_t i1 = start_index + static_cast<uint32_t>(((i + 1) % segments) * 2);
                     const uint32_t i0i = i0 + 1;
                     const uint32_t i1i = i1 + 1;
-                    this->__indicies.emplace_back(i0);
-                    this->__indicies.emplace_back(i1);
-                    this->__indicies.emplace_back(i1i);
-                    this->__indicies.emplace_back(i1i);
-                    this->__indicies.emplace_back(i0i);
-                    this->__indicies.emplace_back(i0);
+                    this->__indices.emplace_back(i0);
+                    this->__indices.emplace_back(i1);
+                    this->__indices.emplace_back(i1i);
+                    this->__indices.emplace_back(i1i);
+                    this->__indices.emplace_back(i0i);
+                    this->__indices.emplace_back(i0);
                 }
 
                 return static_cast<IndexSize_t>(segments * 6);
@@ -571,12 +757,12 @@ namespace Iwa
             inline void __prepare_index_chunk(IndexChunkType type, IndexSize_t index_count,
                                               TResource* resource = nullptr)
             {
-                if (this->__indicies_chunks.size() > 0)
+                if (this->__indices_chunks.size() > 0)
                 {
-                    auto& index_pair = this->__indicies_chunks[this->__indicies_chunks.size() - 1];
+                    auto& index_pair = this->__indices_chunks[this->__indices_chunks.size() - 1];
                     if (this->__cut_index_chunk || index_pair.shader_type != type || index_pair.data != resource)
                     {
-                        this->__indicies_chunks.emplace_back(IndexChunk_t{
+                        this->__indices_chunks.emplace_back(IndexChunk_t{
                             .index = index_pair.index + index_count, .shader_type = type, .data = resource});
                     }
                     else
@@ -586,7 +772,7 @@ namespace Iwa
                 }
                 else
                 {
-                    this->__indicies_chunks.emplace_back(
+                    this->__indices_chunks.emplace_back(
                         IndexChunk_t{.index = index_count, .shader_type = type, .data = resource});
                 }
 
@@ -595,9 +781,13 @@ namespace Iwa
 
         private:
             using clock_t = std::chrono::high_resolution_clock;
+#ifdef IWA_FRAME_DEBUG_INFO
+            std::string __debug_info="";
+#endif
             clock_t::time_point __begin_frame_timepoint = clock_t::now();
             clock_t::time_point __end_frame_timepoint = clock_t::now();
             bool __cut_index_chunk = false;
+            bool __vsync_enabled = true;
         };
 
     } // namespace __private__

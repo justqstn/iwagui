@@ -5,11 +5,12 @@
 // ||       and handle other similar things.
 #define IWA_SR
 #ifdef IWA_SR
-    // --- Automatically swap buffers at the end of render call.
-    #define IWA_SR_AUTO_SWAP
+    // --- Lowers refresh rate when windows is not active/forground
+    #define IWA_SR_LAZY_SWAP_FACTOR 2
 
     // --- Handles resize (automatically resizes viewport to window's size)
     #define  IWA_SR_AUTO_RESIZE
+
 #endif
 
 // ---- Logging ----
@@ -24,7 +25,8 @@
 #define IWA_ASSERT(x) assert(x)
 
 // ---- Debug configuration ----
-// #define IWA_DEBUG // Is debugging enabled
-// #ifdef IWA_DEBUG
-//     // ...
-// #endif
+#define IWA_DEBUGGING // Is debugging enabled
+#ifdef IWA_DEBUGGING
+    // Saves debug information in method
+    #define IWA_FRAME_DEBUG_INFO
+#endif

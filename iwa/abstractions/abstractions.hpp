@@ -1,7 +1,9 @@
 #pragma once
 
+#include "utils/logger.hpp"
 #include "utils/macros.hpp"
 #include <concepts>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -57,31 +59,42 @@ namespace Iwa
             HasInstanceMap(const std::string& id)
             {
                 __id = id;
-                __entities[id] = static_cast<TObject*>(this);
+                __instances[id] = static_cast<TObject*>(this);
             }
             ~HasInstanceMap() noexcept
             {
-                __entities.erase(__id);
+                __instances.erase(__id);
             }
-
 
             constexpr auto operator<=>(const HasInstanceMap<TObject>&) const = default;
 
+            const std::unordered_map<std::string, TObject*>& getInstances() { return this->__instances; }
+
             static TObject* getByID(const std::string& id) noexcept
             {
-                if (__entities.contains(id))
-                    return __entities[id];
+                if (__instances.contains(id))
+                    return __instances[id];
                 else
                     return nullptr;
             }
+
+            static void Clear() noexcept
+            {
+                std::vector<TObject*> to_delete;
+                to_delete.resize(__instances.size());
+                for (auto& it : __instances) to_delete.emplace_back(it.second);
+                for (auto it : to_delete) it->Destroy();
+                __instances.clear();
+            }
+
             const std::string& getID() const { return __id; }
-            static std::unordered_map<std::string, TObject*> __entities;
+
         private:
             std::string __id;
-
+            static std::unordered_map<std::string, TObject*> __instances;
         };
 
         template<typename TObject>
-        std::unordered_map<std::string, TObject*> HasInstanceMap<TObject>::__entities = {};
+        std::unordered_map<std::string, TObject*> HasInstanceMap<TObject>::__instances = {};
     }
 } // namespace Iwa

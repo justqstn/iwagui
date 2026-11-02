@@ -23,9 +23,7 @@ add_executable(main main.cpp)
 target_precompile_headers(main REUSE_FROM iwagui)
 
 target_compile_options(iwagui PUBLIC -std=c++26)
-target_link_options(iwagui PUBLIC -static-libstdc++ -static-libgcc)
-# target_link_options(iwagui PUBLIC -stdlib=libc++)
-target_compile_definitions(iwagui PUBLIC _WIN32_WINNT=0x0A00)
+# target_link_options(iwagui PUBLIC -static-libstdc++ -static-libgcc)
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     target_compile_options(iwagui PUBLIC

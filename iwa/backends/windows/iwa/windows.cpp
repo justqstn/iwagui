@@ -51,6 +51,8 @@
 
 using namespace Iwa;
 
+Signal<HWND, UINT, WPARAM, LPARAM> Iwa::onWndProcSignal = {};
+
 struct
 {
     std::array<bool, static_cast<size_t>(VKey::VKEYS_COUNT)> pressed_keys;
@@ -63,6 +65,8 @@ bool Iwa::isVKeyPressed(VKey key)
 
 bool Iwa::WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
+    onWndProcSignal.call(hWnd, msg, wParam, lParam);
+
     switch (msg)
     {
     case WM_SYSKEYDOWN:

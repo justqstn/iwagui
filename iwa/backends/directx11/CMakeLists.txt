@@ -12,7 +12,12 @@ add_library(iwaguiRenderSDK_lib ${SOURCES})
 target_include_directories(iwaguiRenderSDK_lib PUBLIC
     ${ROOT}
     .
+    ${CMAKE_CURRENT_LIST_DIR}/../windows
 )
+
+if (TARGET iwaguiOSSDK_lib)
+    target_link_libraries(iwaguiRenderSDK_lib PUBLIC iwaguiOSSDK_lib)
+endif()
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     target_compile_options(iwaguiRenderSDK_lib PRIVATE -Wno-c23-extensions)

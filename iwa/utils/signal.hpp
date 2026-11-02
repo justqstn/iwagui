@@ -1,4 +1,5 @@
 #pragma once
+#include <cstddef>
 #include <functional>
 #include <vector>
 
@@ -16,6 +17,7 @@ namespace Iwa
         Signal() = default;
 
         using callback_t = std::function_ref<void(params_t...)>;
+        using listener_id_t = size_t;
 
         /**
          * Calls all attached callbacks
@@ -23,32 +25,56 @@ namespace Iwa
          */
         void call(params_t... params)
         {
-            for (auto it : __functions)
+            for (auto& entry : __functions)
             {
-                it(params...);
+                entry.fn(params...);
             }
         }
 
         /**
          * Attaches callback
-         * @param params Callback (lambda, reference to function)
+         * @return this for chaining
          */
         Iwa::Signal<params_t...>* add(callback_t function)
         {
-            __functions.emplace_back(function);
+            connect(function);
             return this;
         }
 
         /**
-         * Removes callback
-         * @param params Callback (lambda, reference to function)
+         * Attaches callback and returns a stable id for later removal
          */
-        void remove(callback_t function)
+        listener_id_t connect(callback_t function)
         {
-            std::erase_if(__functions, [function](callback_t function2) { return function == function2; });
+            const listener_id_t id = __next_id++;
+            __functions.push_back(Entry{id, function});
+            return id;
         }
 
+        /**
+         * Removes callback previously returned by connect()
+         */
+        void disconnect(listener_id_t id)
+        {
+            std::erase_if(__functions, [id](const Entry& entry) { return entry.id == id; });
+        }
+
+        /**
+         * Removes callback by id (alias of disconnect)
+         */
+        void remove(listener_id_t id) { disconnect(id); }
+
+        bool empty() const { return __functions.empty(); }
+        size_t size() const { return __functions.size(); }
+
     private:
-        std::vector<callback_t> __functions;
+        struct Entry
+        {
+            listener_id_t id = 0;
+            callback_t fn;
+        };
+
+        std::vector<Entry> __functions;
+        listener_id_t __next_id = 1;
     };
 } // namespace Iwa
