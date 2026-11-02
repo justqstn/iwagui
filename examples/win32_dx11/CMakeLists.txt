@@ -11,6 +11,8 @@ find_library(D3D11 D3D11)
 find_library(dwmapi dwmapi)
 
 add_subdirectory(${ROOT}/iwa ${CMAKE_CURRENT_BINARY_DIR}/iwagui)
+
+
 add_subdirectory(${ROOT}/iwa/backends/windows
 	${CMAKE_CURRENT_BINARY_DIR}/iwagui/ossdk)
 
@@ -18,8 +20,12 @@ add_subdirectory(${ROOT}/iwa/backends/directx11
 	${CMAKE_CURRENT_BINARY_DIR}/iwagui/rendersdk)
 
 add_executable(main main.cpp)
+target_precompile_headers(main REUSE_FROM iwagui)
 
 target_compile_options(iwagui PUBLIC -std=c++26)
+target_link_options(iwagui PUBLIC -static-libstdc++ -static-libgcc)
+# target_link_options(iwagui PUBLIC -stdlib=libc++)
+target_compile_definitions(iwagui PUBLIC _WIN32_WINNT=0x0A00)
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     target_compile_options(iwagui PUBLIC
@@ -38,8 +44,15 @@ target_link_libraries(main PUBLIC
 
 
 if(${CMAKE_BUILD_TYPE} STREQUAL release)
-    target_compile_options(main PUBLIC -flto -O3 -DNDEBUG
-    -ffunction-sections -fdata-sections)
+    target_compile_options(main PUBLIC
+        -O3
+        -DNDEBUG
+        -fno-exceptions
+        -ffunction-sections
+        -fdata-sections
+        -ffunction-sections
+        -fdata-sections
+        )
     target_link_options(main PUBLIC -s -fuse-ld=lld -Wl,--gc-sections)
 else()
     target_link_options(main PUBLIC -v)

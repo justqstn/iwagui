@@ -14,7 +14,6 @@ target_include_directories(iwaguiOSSDK_lib PUBLIC
     .
 )
 
-
 if(${CMAKE_BUILD_TYPE} STREQUAL release)
     target_compile_options(iwaguiOSSDK_lib PRIVATE -O3)
     target_link_options(iwaguiOSSDK_lib PRIVATE -s)

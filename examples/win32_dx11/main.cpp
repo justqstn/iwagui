@@ -1,11 +1,22 @@
+/*
+ *
+ * there are some mem leaks in this example
+ */
+
 #include "iwa/directx11.hpp"
 #include "iwa/windows.hpp"
-#include "math.hpp"
+#include "abstractions/rendering/fonts.hpp"
+#include "abstractions/rendering/types.hpp"
+#include "abstractions/rendering/renderer.hpp"
+#include "utils/math.hpp"
+#include "utils/signal.hpp"
 #include "utils/logger.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <d3d11.h>
 #include <d3d11sdklayers.h>
@@ -15,6 +26,7 @@
 #include <format>
 #include <print>
 #include <span>
+#include <string>
 #include <type_traits>
 #include <unordered_set>
 #include <vector>
@@ -26,7 +38,6 @@ HWND Hwnd = NULL;
 D3D_DRIVER_TYPE D3DDriverType = D3D_DRIVER_TYPE_NULL;
 D3D_FEATURE_LEVEL D3DFeatureLevel = D3D_FEATURE_LEVEL_11_0;
 auto MainRenderer = Iwa::Renderer::New("main");
-auto MainRenderContext = Iwa::RenderContext::New(MainRenderer, "main_ctx");
 
 UINT gWidth = 0;
 UINT gHeight = 0;
@@ -94,11 +105,12 @@ HRESULT InitDevice()
 
     DXGI_SWAP_CHAIN_DESC swap_chain_desc;                           // description of swapchain
     ZeroMemory(&swap_chain_desc, sizeof(swap_chain_desc));                       // clearing because some bytes
-    swap_chain_desc.BufferCount = 1;                                // one buffer because one swapchain
+    swap_chain_desc.BufferCount = 2;
     swap_chain_desc.BufferDesc.Width = width;                       // width
     swap_chain_desc.BufferDesc.Height = height;                     // height
+    swap_chain_desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     swap_chain_desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; // pixel format
-    swap_chain_desc.BufferDesc.RefreshRate.Numerator = 240;         // refreshing rate
+    swap_chain_desc.BufferDesc.RefreshRate.Numerator = 0;         // refreshing rate
     swap_chain_desc.BufferDesc.RefreshRate.Denominator = 1;
     swap_chain_desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     swap_chain_desc.OutputWindow = Hwnd;
@@ -164,13 +176,21 @@ HRESULT InitDevice()
 
 void CleanupDevice()
 {
-    MainRenderContext->Destroy();
     MainRenderer->Destroy();
 }
 
+Iwa::Signal<> test_signal;
+
+void InitSignal()
+{
+    test_signal.add([](){
+        // Iwa::LogInfo("called");
+    });
+}
 
 int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, LPSTR lpCmdLine, int nCmdShow)
 {
+    InitSignal();
     HInstance = hInstance;
 
     HRESULT hr = InitWindow(nCmdShow);
@@ -198,49 +218,52 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hInstPrev, LPSTR lpCmdLine, 
     }
     else Iwa::LogInfo("MainRenderer->Initialize()");
 
-    MainRenderer->AddRenderContext(MainRenderContext);
 
-    std::vector<uint8_t> arial_font_data = {
-        #embed "res/arial.TTF"
-    };
+    // std::vector<uint8_t> arial_font_data = {
+    //     #embed "res/arial.TTF"
+    // };
 
-    std::vector<uint8_t> verdanai_font_data = {
-        #embed "res/verdanai.TTF"
-    };
+    // std::vector<uint8_t> verdanai_font_data = {
+    //     #embed "res/verdanai.TTF"
+    // };
 
-    std::array<Iwa::CharRange_t, 2> ranges = {
-        Iwa::CharRange_t::Cyrillic(),
-        Iwa::CharRange_t::ASCII(),
-    };
+    // std::array<Iwa::CharRange_t, 2> ranges = {
+    //     Iwa::CharRange_t::Cyrillic(),
+    //     Iwa::CharRange_t::ASCII(),
+    // };
 
-    auto arial_font = Iwa::BitmapFont::New(MainRenderer, "test_font", 55)->Load(arial_font_data, ranges);
-    auto verdanai_font = Iwa::BitmapFont::New(MainRenderer, "test_font2", 32)->Load(verdanai_font_data, ranges);
+    // auto arial_font = Iwa::BitmapFont::New(MainRenderer, "test_font", 18)->Load(arial_font_data, ranges);
+    // auto verdanai_font = Iwa::BitmapFont::New(MainRenderer, "test_font2", 100)->Load(verdanai_font_data, ranges);
 
     MSG msg = {};
 
+    auto& dt = MainRenderer->getDeltaTimeRef();
     std::unordered_set<UINT> exit_codes = { WM_QUIT, WM_CLOSE, WM_DESTROY, WM_NCDESTROY };
+
     while (!exit_codes.contains(msg.message))
     {
         if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
         {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
+
         }
 
         MainRenderer->PreRender();
-        MainRenderContext->RenderWText({0,80}, *arial_font, L"Привет Hello", 0xFFFFFFFF);
-        MainRenderContext->RenderWText({0,120}, *verdanai_font, L"Привет Hello", 0xFFFFFFFF);
-        MainRenderContext->RenderWText({0,140}, *verdanai_font, L"Привет Hello", 0xFFFFFFFF);
+        Color_t white = {255,255,255,255};
+        MainRenderer->PushScissorRect({200, 200, 300, 300});
+        MainRenderer->RenderFilledRect({200, 200, 400, 800}, {255,255,255,255});
+        MainRenderer->PopScissorRect();
+        MainRenderer->PushScissorRect({200, 200, 500, 500});
+        MainRenderer->RenderFilledRect({200, 200, 400, 800}, {255,255,255,128});
+        MainRenderer->PopScissorRect();
+        MainRenderer->RenderFilledRect({200, 200, 400, 800}, {255,255,255,64});
         MainRenderer->Render();
-
-        // technologies
-        Rectpx_t t = {0_px, 0_px, 100_px, 100_px};
-        Iwa::LogInfo("{}", t.getArea());
     }
 
 
-    arial_font->Destroy();
-    verdanai_font->Destroy();
+    // arial_font->Destroy();
+    // verdanai_font->Destroy();
     CleanupDevice();
 
     return 0;
@@ -254,13 +277,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
     switch (uMsg)
     {
     case WM_PAINT:
+
         break;
     case WM_SIZE:
     {
         gWidth = (UINT)LOWORD(lParam);
         gHeight = (UINT)HIWORD(lParam);
 
-        MainRenderer->ResizeViewport(Vec2_t(gWidth, gHeight));
+        MainRenderer->ResizeViewport();
 
         return false;
     }

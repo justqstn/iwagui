@@ -23,7 +23,7 @@ namespace Iwa
          */
         void call(params_t... params)
         {
-            for (auto it : this->__functions)
+            for (auto it : __functions)
             {
                 it(params...);
             }
@@ -35,7 +35,7 @@ namespace Iwa
          */
         Iwa::Signal<params_t...>* add(callback_t function)
         {
-            this->__functions.emplace_back(function);
+            __functions.emplace_back(function);
             return this;
         }
 
@@ -45,11 +45,10 @@ namespace Iwa
          */
         void remove(callback_t function)
         {
-            std::erase_if(this->__functions, [function](callback_t function2) { return function == function2; });
+            std::erase_if(__functions, [function](callback_t function2) { return function == function2; });
         }
 
     private:
-        // @todo: here is bad memory using
         std::vector<callback_t> __functions;
     };
 } // namespace Iwa

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "sdk/macroses.hpp"
+#include "utils/macros.hpp"
 #include <concepts>
 #include <memory>
 #include <string>
@@ -17,7 +17,7 @@ namespace Iwa
         {
             struct Wrapper : public TObject
             {
-                constexpr IWA_FORCEINLINE Wrapper(TConstructorArgs... args) : TObject(args...) {}
+                    constexpr IWA_FORCEINLINE Wrapper(TConstructorArgs... args) : TObject(args...) {}
                 constexpr IWA_FORCEINLINE ~Wrapper() { }
             };
 
@@ -44,8 +44,8 @@ namespace Iwa
         struct HasResource
         {
         public:
-            constexpr TResource* getResource() const { return this->__resource; }
-            constexpr const bool isLoaded() const { return this->__resource != nullptr; }
+            constexpr TResource* getResource() const { return __resource; }
+            constexpr const bool isLoaded() const { return __resource != nullptr; }
         protected:
             TResource* __resource = nullptr;
         };
@@ -56,12 +56,12 @@ namespace Iwa
         public:
             HasInstanceMap(const std::string& id)
             {
-                this->__id = id;
+                __id = id;
                 __entities[id] = static_cast<TObject*>(this);
             }
             ~HasInstanceMap() noexcept
             {
-                __entities.erase(this->__id);
+                __entities.erase(__id);
             }
 
 
@@ -74,13 +74,14 @@ namespace Iwa
                 else
                     return nullptr;
             }
-            const std::string& getID() const { return this->__id; }
+            const std::string& getID() const { return __id; }
+            static std::unordered_map<std::string, TObject*> __entities;
         private:
             std::string __id;
-            static std::unordered_map<std::string_view, TObject*> __entities;
+
         };
 
-        template<typename TEntity>
-        std::unordered_map<std::string_view, TEntity*> HasInstanceMap<TEntity>::__entities = {};
+        template<typename TObject>
+        std::unordered_map<std::string, TObject*> HasInstanceMap<TObject>::__entities = {};
     }
 } // namespace Iwa

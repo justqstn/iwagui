@@ -1,5 +1,6 @@
 #pragma once
 #include "config.hpp"
+#include "utils/macros.hpp"
 
 #include <cassert>
 #include <chrono>
@@ -34,16 +35,16 @@ namespace Iwa
 
     #ifdef IWA_LOGGING
     template <typename... TArgs>
-    void Log(std::string_view channel, std::string_view color, const __private__::FmtString& fmt, TArgs... args)
+    void Log(std::string_view channel, std::string_view color, const __private__::FmtString& fmt, TArgs... args) noexcept
     {
         auto filename = static_cast<std::string_view>(fmt.loc.file_name());
 
         char* tabs = nullptr;
         if (__private__::TabCount > 0)
         {
-            tabs = new char[__private__::TabCount+1];
-            std::memset(tabs, '\t', __private__::TabCount);
-            tabs[__private__::TabCount] = '\0';
+            tabs = new char[__private__::TabCount*4+1];
+            std::memset(tabs, ' ', __private__::TabCount*4);
+            tabs[__private__::TabCount*4] = '\0';
         }
         else
             tabs = const_cast<char*>("");
@@ -68,42 +69,42 @@ namespace Iwa
     }
     #else
     template <typename... TArgs>
-    inline void Log(std::string_view channel, std::string_view color, const FmtString& fmt, TArgs... args) {}
+    IWA_FORCEINLINE void Log(std::string_view channel, std::string_view color, const __private__::FmtString& fmt, TArgs... args) noexcept {}
     #endif
 
     template <typename... TArgs>
-    inline void LogFatal(const __private__::FmtString& fmt, TArgs... args)
+    IWA_FORCEINLINE void LogFatal(const __private__::FmtString& fmt, TArgs... args) noexcept
     {
         Log("FATAL", "38;2;190;20;20", fmt, args...);
         return IWA_ASSERT(0 && "Fatal error!" == std::format(std::dynamic_format(fmt.str), args...));
     }
 
     template <typename... TArgs>
-    inline void LogError(const __private__::FmtString& fmt, TArgs... args)
+    IWA_FORCEINLINE void LogError(const __private__::FmtString& fmt, TArgs... args) noexcept
     {
         return Log("ERROR", "38;2;255;20;20", fmt, args...);
     }
 
     template <typename... TArgs>
-    inline void LogWarn(const __private__::FmtString& fmt, TArgs... args)
+    IWA_FORCEINLINE void LogWarn(const __private__::FmtString& fmt, TArgs... args) noexcept
     {
         return Log("WARN", "38;2;255;196;60", fmt, args...);
     }
 
     template <typename... TArgs>
-    inline void LogInfo(const __private__::FmtString& fmt, TArgs... args)
+    IWA_FORCEINLINE void LogInfo(const __private__::FmtString& fmt, TArgs... args) noexcept
     {
         return Log("INFO", "38;2;128;128;255", fmt, args...);
     }
 
     template <typename... TArgs>
-    inline void LogDebug(const __private__::FmtString& fmt, TArgs... args)
+    IWA_FORCEINLINE void LogDebug(const __private__::FmtString& fmt, TArgs... args) noexcept
     {
         return Log("DEBUG", "38;2;200;200;200", fmt, args...);
     }
 
     template <typename... TArgs>
-    inline void LogVerbose(const __private__::FmtString& fmt, TArgs... args)
+    IWA_FORCEINLINE void LogVerbose(const __private__::FmtString& fmt, TArgs... args) noexcept
     {
         return Log("VERBOSE", "38;2;100;100;100", fmt, args...);
     }
