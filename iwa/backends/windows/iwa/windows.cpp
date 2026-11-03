@@ -11,6 +11,7 @@
 
 #include <array>
 #include <windows.h>
+#include <windowsx.h>
 
 #ifndef VK_NAVIGATION_VIEW
 #define VK_NAVIGATION_VIEW 0x88
@@ -88,6 +89,23 @@ bool Iwa::WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
         VKey key = toIwaKey(static_cast<int>(wParam));
         data.pressed_keys[static_cast<size_t>(key)] = false;
         onKeyReleasedSignal.call(key);
+        break;
+    }
+    case WM_MOUSEMOVE:
+    case WM_LBUTTONDOWN:
+    case WM_LBUTTONUP:
+    case WM_LBUTTONDBLCLK:
+    case WM_RBUTTONDOWN:
+    case WM_RBUTTONUP:
+    case WM_RBUTTONDBLCLK:
+    case WM_MBUTTONDOWN:
+    case WM_MBUTTONUP:
+    case WM_MBUTTONDBLCLK:
+    case WM_XBUTTONDOWN:
+    case WM_XBUTTONUP:
+    case WM_XBUTTONDBLCLK:
+    {
+        mouseCursorPos = {static_cast<float>(GET_X_LPARAM(lParam)), static_cast<float>(GET_Y_LPARAM(lParam))};
         break;
     }
     default:
